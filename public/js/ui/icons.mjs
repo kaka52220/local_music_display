@@ -25,6 +25,11 @@ function roundedPoly(pts, r) {
   return `${d}Z`;
 }
 const solid = (pts, r) => `<path fill="currentColor" d="${roundedPoly(pts, r)}"/>`;
+const thin = (d, extra = '') =>
+  `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"${extra}/>`;
+// 回环：左右半圆 + 上下直线组成的跑道形，右上留口，上沿末端接实心三角箭头
+const LOOP = `<path d="M19.4 11.4A4.7 4.7 0 0 1 15.2 16.8H8.8A4.7 4.7 0 0 1 8.8 7.4h5.6" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>`
+  + `<path fill="currentColor" d="M14.2 4.9Q14.2 4.4 14.7 4.7L18.3 7Q18.8 7.4 18.3 7.8L14.7 10.1Q14.2 10.4 14.2 9.9Z"/>`;
 const bold = (d, extra = '') =>
   `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"${extra}/>`;
 
@@ -40,9 +45,10 @@ export const ICONS = {
   heartOn: wrap('<path fill="currentColor" d="M12 19.2s-7.2-4.3-7.2-9.4A3.9 3.9 0 0 1 8.7 5.9c1.4 0 2.6.7 3.3 1.9.7-1.2 1.9-1.9 3.3-1.9a3.9 3.9 0 0 1 3.9 3.9c0 5.1-7.2 9.4-7.2 9.4z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/>'),
   // 布局样式：左右分栏的窗口
   layout: wrap(bold('M5.5 4.8h13a1.7 1.7 0 0 1 1.7 1.7v11a1.7 1.7 0 0 1-1.7 1.7h-13a1.7 1.7 0 0 1-1.7-1.7v-11a1.7 1.7 0 0 1 1.7-1.7zM10.6 4.8v14.4') + '<circle cx="7.2" cy="10.4" r="1.6" fill="currentColor"/>' + bold('M13.4 9.2h4M13.4 12h4M13.4 14.8h2.6', ' stroke-width="1.6"')),
+  // 歌单：▶ + 短线，下方两条长线（细线条，仿网易云）
   playlist: wrap(
-    solid([[4.4, 4.7], [4.4, 9.3], [8, 7]], 0.7) +
-    bold('M10.8 7h9M4.6 12h15.2M4.6 17h15.2'),
+    solid([[4.2, 4.9], [4.2, 9.1], [7.8, 7]], 0.6) +
+    thin('M10.6 7h9.2M4.4 12.2h15.4M4.4 17.4h15.4'),
   ),
   library: wrap(line('M4 6.5h16M4 12h16M4 17.5h10')),
   playAll: wrap(line('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z') + '<path fill="currentColor" d="M10 8.6v6.8c0 .5.55.8.98.53l5.2-3.4a.63.63 0 0 0 0-1.06l-5.2-3.4c-.43-.27-.98.03-.98.53z"/>'),
@@ -58,21 +64,15 @@ export const ICONS = {
     line('M15.5 9.5l5 5M20.5 9.5l-5 5'),
   ),
   mode: {
-    // 顺序播放：列表 + 向下箭头
-    sequence: wrap(
-      bold('M4 6.5h10M4 12h10M4 17.5h7') +
-      bold('M18 5.5v12.5M15.6 15.8l2.4 2.4 2.4-2.4'),
-    ),
-    // 单曲循环：回环 + 数字 1
-    loop_one: wrap(
-      bold('M17.5 7.5H8a4.5 4.5 0 0 0-4.5 4.5v.5M6.5 16.5H16a4.5 4.5 0 0 0 4.5-4.5v-.5') +
-      bold('M15 5l2.5 2.5L15 10M9 19l-2.5-2.5L9 14') +
-      bold('M11.2 11.2l1.3-1v4.4', ' stroke-width="1.6"'),
-    ),
-    // 随机播放：交叉箭头
+    // 顺序（列表循环样式）：跑道形回环，开口在右上，箭头指向右
+    sequence: wrap(LOOP),
+    // 单曲循环：同一个回环，中间一个小"1"
+    loop_one: wrap(LOOP + thin('M11.1 10.9l1.35-1.05v4.7', ' stroke-width="1.4"')),
+    // 随机播放：两条交叉曲线 + 实心箭头，线宽与回环一致
     shuffle: wrap(
-      bold('M3.5 7.5h3c4.5 0 6.5 9 11 9h2.5M3.5 16.5h3c1.6 0 2.8-1.1 3.8-2.5M13.7 10c1-1.4 2.2-2.5 3.8-2.5h2.5') +
-      bold('M18 5.2l2.3 2.3L18 9.8M18 14.2l2.3 2.3L18 18.8'),
+      thin('M3.8 7.6h2.6c4.6 0 6.4 8.8 11 8.8h1.2M3.8 16.4h2.6c1.6 0 2.8-1.1 3.8-2.5M13.8 10.1c1-1.4 2.2-2.5 3.6-2.5h1.2') +
+      solid([[17.6, 5.4], [21, 7.6], [17.6, 9.8]], 0.6) +
+      solid([[17.6, 14.2], [21, 16.4], [17.6, 18.6]], 0.6),
     ),
   },
 };

@@ -11,7 +11,9 @@
 import { fetchLyrics } from '../api/client.mjs';
 import { formatTime } from '../util/format.mjs';
 
-const FOCUS = 0.4;        // 焦点线位于歌词视区高度的比例
+// 焦点线位于歌词视区高度的比例：经典布局 0.4；分栏布局由 CSS 变量 --lyric-focus 设为 0.5（正中）
+const DEFAULT_FOCUS = 0.4;
+let FOCUS = DEFAULT_FOCUS;
 const IDLE_EXIT_MS = 3000;
 const SETTLE_MS = 160;
 
@@ -37,7 +39,13 @@ export function createLyricsView(engine) {
   let renderToken = 0;
 
   /* ---------------- 渲染 ---------------- */
+  function readFocus() {
+    const v = parseFloat(getComputedStyle(box).getPropertyValue('--lyric-focus'));
+    FOCUS = v > 0 && v < 1 ? v : DEFAULT_FOCUS;
+  }
+
   function updateEdgePadding() {
+    readFocus();
     const h = box.clientHeight;
     if (!h) return false;
     inner.style.paddingTop = `${h * FOCUS}px`;

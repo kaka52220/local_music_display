@@ -289,7 +289,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 /* 歌词定位条：时间 + 引导线（滚动中）→ 圆角高亮行（停稳）+ 从这里播放 */
 .scrub {
   --row-h: 28px;
-  position: absolute; left: -68px; right: -8px; top: 40%;
+  position: absolute; left: -68px; right: -8px; top: 40%; /* JS 按焦点线覆盖 */
   height: calc(var(--row-h) + 12px); transform: translateY(-50%);
   pointer-events: none; z-index: 2;
   opacity: 0; transition: opacity .2s ease, height .2s var(--ease);
@@ -542,77 +542,99 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 /* ============================================================
    布局：经典（默认）/ 分栏（网易云平板端：左播放器 + 控制，右歌词）
    ============================================================ */
-.dock, .credits { display: none; }
+.dock { display: none; }
 .stage, .bar { transition: opacity .16s ease; }
 .app.is-relayout .stage, .app.is-relayout .bar { opacity: 0; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .36s; animation-timing-function: cubic-bezier(.3, .7, .3, 1); }
 
-.app[data-layout="split"] { grid-template-rows: auto 1fr; }
+/* v5：分栏按网易云平板端比例重做 —— 所有尺寸都由唱片直径 --disc 推导，
+   顶栏改为悬浮层（不占高度），左列内容中心约在 25vw，歌词从约 55% 宽处开始、当前行垂直居中。 */
+.app[data-layout="split"] { grid-template-rows: 1fr; }
+.app[data-layout="split"] .topbar { position: absolute; top: 0; left: 0; right: 0; pointer-events: none; }
+.app[data-layout="split"] .topbar > * { pointer-events: auto; }
 .app[data-layout="split"] .bar { display: none; }
-.app[data-layout="split"] .stage { grid-template-columns: 45fr 55fr; }
-.app[data-layout="split"] .bg-glow-1 { left: calc(22.5vw - 35vmin); top: calc(42vh - 35vmin); }
+.app[data-layout="split"] .stage { grid-template-columns: 55fr 45fr; height: 100vh; }
+.app[data-layout="split"] .bg-glow-1 { left: calc(25vw - 35vmin); top: calc(46vh - 35vmin); }
 .app[data-layout="split"] .disc-col {
-  --disc: min(43vh, 30vw);
-  --dock-w: clamp(320px, calc(var(--disc) * 1.42), 600px);
-  padding: 0 0 clamp(18px, 4vh, 48px) clamp(16px, 3vw, 56px);
+  --disc: min(27vw, 46vh);
+  --dock-w: calc(var(--disc) * 1.36);
+  padding: 0 5vw 0 0;
   justify-content: center;
 }
-.app[data-layout="split"] .disc-stage { margin-top: calc(var(--disc) * .14); }
+.app[data-layout="split"] .disc-area {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 3vw, #000 calc(100% - 5vw), transparent);
+  mask-image: linear-gradient(90deg, transparent 0, #000 3vw, #000 calc(100% - 5vw), transparent);
+}
+.app[data-layout="split"] .disc-stage { margin-top: calc(var(--disc) * .25); }
 .app[data-layout="split"] .meta { display: none; }
 .app[data-layout="split"] .dock {
   display: flex; flex-direction: column;
-  width: var(--dock-w); margin-top: clamp(22px, 5vh, 56px);
+  width: var(--dock-w); margin-top: calc(var(--disc) * .13);
 }
-.dock-meta { display: flex; align-items: center; gap: 16px; transition: opacity .38s var(--ease), transform .38s var(--ease); }
+.dock-meta { display: flex; align-items: center; gap: calc(var(--disc) * .04); transition: opacity .38s var(--ease), transform .38s var(--ease); }
 .dock-text { flex: 1; min-width: 0; }
 .dock-title {
-  margin: 0; font-size: clamp(18px, 2.5vh, 26px); font-weight: 500; letter-spacing: .3px; line-height: 1.3;
+  margin: 0; font-size: clamp(17px, calc(var(--disc) * .068), 36px); font-weight: 600; letter-spacing: .3px; line-height: 1.3;
   color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.dock-artist { margin: 5px 0 0; font-size: clamp(13px, 1.6vh, 15px); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dock-actions { flex: none; display: flex; gap: 10px; }
-.dock-actions .icon-btn { width: 36px; height: 36px; padding: 6px; color: rgba(255, 255, 255, .78); }
+.dock-artist {
+  margin: calc(var(--disc) * .018) 0 0; font-size: clamp(13px, calc(var(--disc) * .05), 26px);
+  color: rgba(255, 255, 255, .5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dock-actions { flex: none; display: flex; gap: calc(var(--disc) * .03); }
+.dock-actions .icon-btn {
+  width: clamp(30px, calc(var(--disc) * .1), 52px); height: clamp(30px, calc(var(--disc) * .1), 52px);
+  padding: calc(var(--disc) * .014); color: rgba(255, 255, 255, .78);
+}
 #btn-dock-lyric.is-off { color: var(--text-4); }
 .like-btn.is-liked { color: var(--accent); }
 .like-btn.is-pop svg { animation: like-pop .42s cubic-bezier(.3, 1.6, .5, 1); }
 @keyframes like-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
 
-.dock-progress { margin-top: clamp(16px, 2.6vh, 28px); }
-.dock-slider { height: 16px; display: flex; align-items: center; }
-.dock-slider .progress { height: 16px; }
-.dock-slider .progress::-webkit-slider-runnable-track {
-  height: 3px; border-radius: 2px;
-}
-.dock-slider .progress { --c-played: rgba(255, 255, 255, .8); --c-buffer: rgba(255, 255, 255, .3); --c-rest: rgba(255, 255, 255, .12); }
-.dock-slider .progress::-webkit-slider-thumb { opacity: 1; width: 9px; height: 9px; margin-top: -3px; box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
+.dock-progress { margin-top: calc(var(--disc) * .075); }
+.dock-slider { height: calc(var(--disc) * .06); min-height: 16px; display: flex; align-items: center; }
+.dock-slider .progress { height: 100%; }
+.dock-slider .progress::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; }
+.dock-slider .progress { --c-played: rgba(255, 255, 255, .85); --c-buffer: rgba(255, 255, 255, .32); --c-rest: rgba(255, 255, 255, .13); }
+.dock-slider .progress::-webkit-slider-thumb { opacity: 1; width: 10px; height: 10px; margin-top: -3.5px; box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
 .dock-slider .progress::-moz-range-thumb { opacity: 1; }
 .dock-slider:hover .progress::-webkit-slider-runnable-track { height: 4px; }
-.dock-slider:hover .progress::-webkit-slider-thumb { width: 13px; height: 13px; margin-top: -4.5px; }
-.dock-times { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-
-.dock-transport { margin-top: clamp(10px, 2.2vh, 26px); display: flex; justify-content: center; }
-.dock-transport .bar-center { width: 100%; justify-content: space-between; padding: 0 2%; gap: 0; }
-.dock-transport .icon-btn { color: rgba(255, 255, 255, .8); }
-.dock-transport #now-mode, .dock-transport #now-playlist { width: 34px; height: 34px; padding: 5px; color: rgba(255, 255, 255, .62); }
-.dock-transport #now-prev, .dock-transport #now-next { width: clamp(40px, 5.4vh, 50px); height: clamp(40px, 5.4vh, 50px); padding: 7px; color: rgba(255, 255, 255, .86); }
-.dock-transport .play-btn { width: clamp(60px, 8vh, 76px); height: clamp(60px, 8vh, 76px); padding: 9px; color: rgba(255, 255, 255, .95); }
-
-/* 右侧：只有歌词（上方署名），当前行大且亮，其余小而半透明 */
-.app[data-layout="split"] .info-col { padding: clamp(28px, 8vh, 110px) clamp(28px, 6vw, 120px) 0 clamp(20px, 4vw, 72px); }
-.app[data-layout="split"] .credits {
-  display: flex; flex-direction: column; gap: clamp(6px, 1vh, 10px);
-  flex: none; max-width: 560px; transition: opacity .38s var(--ease);
+.dock-slider:hover .progress::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -5px; }
+.dock-times {
+  display: flex; justify-content: space-between; margin-top: calc(var(--disc) * .008);
+  font-size: clamp(11px, calc(var(--disc) * .04), 17px); color: rgba(255, 255, 255, .45); font-variant-numeric: tabular-nums;
 }
-.credit { margin: 0; font-size: clamp(13px, 1.55vh, 15px); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.credit b { font-weight: 400; color: var(--text-2); }
-.app[data-layout="split"] .lyrics-wrap { margin-top: clamp(14px, 2.6vh, 30px); }
-.app[data-layout="split"] .lyric-line { font-size: clamp(15px, 1.95vh, 21px); color: rgba(255, 255, 255, .38); padding: clamp(9px, 1.45vh, 15px) 0; }
-.app[data-layout="split"] .lyric-line.active { color: #fff; }
-.app[data-layout="split"] .lyric-line.active .lyric-text { transform: scale(1.2); }
+
+/* 主控一行：模式 | 上一首 | 播放/暂停 | 下一首 | 列表，铺满进度条宽度（与网易云相同的五点排布） */
+.dock-transport { margin-top: calc(var(--disc) * .07); display: flex; justify-content: center; }
+.dock-transport .bar-center { width: 100%; justify-content: space-between; padding: 0; gap: 0; }
+.dock-transport .icon-btn { padding: 0; color: rgba(255, 255, 255, .86); }
+.dock-transport #now-mode, .dock-transport #now-playlist {
+  width: calc(var(--disc) * .12); height: calc(var(--disc) * .12); color: rgba(255, 255, 255, .62);
+}
+.dock-transport #now-mode.is-on { color: rgba(255, 255, 255, .62); }
+.dock-transport #now-prev, .dock-transport #now-next { width: calc(var(--disc) * .15); height: calc(var(--disc) * .15); }
+.dock-transport .play-btn { width: calc(var(--disc) * .2); height: calc(var(--disc) * .2); color: #fff; }
+.dock-transport .icon-btn:hover { color: #fff; }
+
+/* 右侧：只有歌词。列 = 整个视口高度，焦点线 = 列中线 = 视口中线 */
+.app[data-layout="split"] .info-col { padding: 0 clamp(24px, 6vw, 140px) 0 0; }
+.app[data-layout="split"] .lyrics-wrap { margin-top: 0; }
 .app[data-layout="split"] .lyrics-box {
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 74%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 74%, transparent 100%);
+  --lyric-focus: .5;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 24%, #000 76%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 24%, #000 76%, transparent 100%);
 }
+.app[data-layout="split"] .lyrics-inner { max-width: min(600px, 100%); }
+.app[data-layout="split"] .lyric-line {
+  font-size: clamp(15px, min(2.5vh, 1.55vw), 26px); line-height: 1.55;
+  color: rgba(255, 255, 255, .42); padding: .62em 0;
+}
+.app[data-layout="split"] .lyric-text { white-space: normal; overflow-wrap: anywhere; max-width: 94%; }
+.app[data-layout="split"] .lyric-line.is-gap { padding: 0; height: .9em; }
+.app[data-layout="split"] .lyric-line.active { color: #fff; }
+.app[data-layout="split"] .lyric-line.active .lyric-text { transform: scale(1.07); font-weight: 600; }
+.app[data-layout="split"] .lyric-empty { padding-top: 0; position: absolute; top: 50%; transform: translateY(-50%); }
 
 /* ============================================================
    右上角：布局样式选择弹窗（毛玻璃 + 弹性展开）

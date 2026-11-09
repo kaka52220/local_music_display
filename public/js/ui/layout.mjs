@@ -41,7 +41,6 @@ export function createLayout(engine, { toggleLyrics, isLyricsOn }) {
   const dockCur = document.getElementById('dock-cur');
   const dockTotal = document.getElementById('dock-total');
   const dockMeta = document.querySelector('.dock-meta');
-  const credits = document.getElementById('credits');
   const likeBtn = document.getElementById('btn-like');
   const dockLyric = document.getElementById('btn-dock-lyric');
 
@@ -128,32 +127,16 @@ export function createLayout(engine, { toggleLyrics, isLyricsOn }) {
   document.getElementById('btn-lyric')?.addEventListener('click', () => setTimeout(renderLyricBtn));
   document.getElementById('sa-lyric')?.addEventListener('click', () => setTimeout(renderLyricBtn));
 
-  function renderCredits(track) {
-    credits.replaceChildren();
-    [['歌手', track.artist], ['专辑', track.album || '未知专辑'], ['来源', '本地音乐']].forEach(([k, v]) => {
-      const row = document.createElement('p');
-      row.className = 'credit';
-      const label = document.createElement('span');
-      label.textContent = `${k}：`;
-      const val = document.createElement('b');
-      val.textContent = v || '未知';
-      row.append(label, val);
-      credits.appendChild(row);
-    });
-  }
-
   engine.on('trackchange', ({ track }) => {
     current = track;
     // 当帧更新文字 + 短淡入，不延迟
     dockTitle.textContent = track.title;
     dockTitle.title = track.title;
     dockArtist.textContent = track.artist || '未知歌手';
-    renderCredits(track);
     renderLike();
     dockTotal.textContent = formatTime(track.duration);
     dockCur.textContent = '00:00';
     swapIn(dockMeta);
-    swapIn(credits);
   });
 
   let scrubbing = false;
