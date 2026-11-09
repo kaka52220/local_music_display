@@ -9,8 +9,10 @@ import { createNowPlaying } from './ui/nowPlaying.mjs';
 import { createSheet } from './ui/sheet.mjs';
 import { createLayout } from './ui/layout.mjs';
 import { loadSession, saveSession } from './state/persistence.mjs';
+import { initPressFeedback } from './ui/pressFeedback.mjs';
 
 const engine = createPlayerEngine();
+initPressFeedback();
 // 调试/自动化测试（?audiodebug）：暴露引擎
 if (new URLSearchParams(location.search).has('audiodebug')) window.__engine = engine;
 const nowPlaying = createNowPlaying(engine);

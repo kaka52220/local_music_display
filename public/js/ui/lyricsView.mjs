@@ -14,6 +14,7 @@
  */
 import { fetchLyrics } from '../api/client.mjs';
 import { formatTime } from '../util/format.mjs';
+import { buildTiming, measure, fillAt } from './karaoke.mjs';
 
 // 焦点线位于歌词视区高度的比例：经典布局 0.4；分栏布局由 CSS 变量 --lyric-focus 设为 0.5（正中）
 const DEFAULT_FOCUS = 0.4;
@@ -134,11 +135,20 @@ export function createLyricsView(engine) {
         if (!line.text) el.classList.add('is-gap');
         const text = document.createElement('span');
         text.className = 'lyric-text';
-        text.textContent = line.text;
+        const kara = document.createElement('span'); // 行内元素：逐字填充的渐变跨视觉行连续
+        kara.className = 'kara';
+        kara.textContent = line.text;
+        text.appendChild(kara);
         el.appendChild(text);
         inner.appendChild(el);
-        return { ...line, el };
+        return { ...line, el, kara, timing: null, geo: null, fill: -1 };
       });
+      if (synced) {
+        lines.forEach((l, i) => {
+          const next = lines.slice(i + 1).find((n) => n.time > l.time);
+          if (l.text) l.timing = buildTiming(l, next ? next.time : NaN);
+        });
+      }
       activeIndex = -1;
       if (updateEdgePadding()) {
         const t = engine.getCurrentTime();
@@ -172,11 +182,31 @@ export function createLyricsView(engine) {
       else break;
     }
     while (idx > 0 && !lines[idx].text) idx--;
-    if (idx === activeIndex) return;
-    lines[activeIndex]?.el.classList.remove('active');
-    activeIndex = idx;
-    lines[idx]?.el.classList.add('active');
-    if (!scrubbing) scrollToLine((lines[idx] || lines[0]).el, smooth);
+    if (idx !== activeIndex) {
+      const prev = lines[activeIndex];
+      if (prev) {
+        prev.el.classList.remove('active');
+        // 向后走：上一行保持全亮，随 --lit 过渡慢慢褪成灰色；向前跳（拖回去）：清空
+        setFill(prev, idx > activeIndex && prev.geo ? prev.geo.total + 40 : 0);
+      }
+      activeIndex = idx;
+      lines[idx]?.el.classList.add('active');
+      if (!scrubbing) scrollToLine((lines[idx] || lines[0]).el, smooth);
+    }
+    updateFill(currentTime);
+  }
+
+  /* ---------------- 逐字高亮 ---------------- */
+  function setFill(line, px) {
+    if (!line || Math.abs(px - line.fill) < 0.25) return;
+    line.fill = px;
+    line.kara.style.setProperty('--fill', `${px.toFixed(1)}px`);
+  }
+  function updateFill(t) {
+    const line = lines[activeIndex];
+    if (!line?.timing) return;
+    if (!line.geo) line.geo = measure(line.kara, line.timing);
+    setFill(line, fillAt(line.timing, line.geo.geo, t));
   }
 
   /* ---------------- 定位模式 ---------------- */
@@ -327,6 +357,7 @@ export function createLyricsView(engine) {
   scrubPlay.addEventListener('click', (e) => { e.stopPropagation(); seekTo(target); });
 
   new ResizeObserver(() => {
+    lines.forEach((l) => { l.geo = null; });
     if (!lines.length || !updateEdgePadding()) return;
     if (scrubbing) { placeScrub(); return; }
     const anchor = lines[activeIndex >= 0 ? activeIndex : 0];

@@ -84,11 +84,50 @@ export function createSheet(engine, { onToggleLyrics, isLyricsOn }) {
     modeLabel.textContent = MODE_LABEL[mode];
   }
 
-  function locateCurrent(smooth = true) {
+  /**
+   * 定位当前：把正在播放的行滚到列表可视区正中（靠近两端时贴边）。
+   * 注意不能用 el.offsetTop——它相对的是最近的定位祖先（整个弹窗），会把头部/快捷操作/搜索框的高度也算进去，
+   * 导致多滚了约 3–4 行（v6 及之前的 bug）。这里用两者的 getBoundingClientRect 差值 + 当前 scrollTop，
+   * 与 padding、弹窗的 transform、外层偏移都无关。
+   */
+  let scrollAnim = 0;
+  function stopScrollAnim() { cancelAnimationFrame(scrollAnim); scrollAnim = 0; }
+  function scrollListTo(top, ms) {
+    stopScrollAnim();
+    const from = list.scrollTop;
+    if (!ms || Math.abs(top - from) < 1) { list.scrollTop = top; return; }
+    const t0 = performance.now();
+    const ease = (k) => 1 - (1 - k) ** 3;
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / ms);
+      list.scrollTop = from + (top - from) * ease(k);
+      scrollAnim = k < 1 ? requestAnimationFrame(step) : 0;
+    };
+    scrollAnim = requestAnimationFrame(step);
+  }
+  // 用户自己滚动时立即让出控制权
+  ['wheel', 'pointerdown', 'touchstart'].forEach((t) => list.addEventListener(t, stopScrollAnim, { passive: true }));
+
+  function locateTarget(el) {
+    const lr = list.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    const rowCenter = er.top - lr.top - list.clientTop + list.scrollTop + er.height / 2;
+    const max = list.scrollHeight - list.clientHeight;
+    return Math.max(0, Math.min(max, rowCenter - list.clientHeight / 2));
+  }
+
+  function locateCurrent(smooth = true, pulse = smooth) {
     const el = list.querySelector('.song.is-current');
     if (!el) return;
-    const top = el.offsetTop - list.clientHeight / 2 + el.offsetHeight / 2;
-    list.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' });
+    const top = locateTarget(el);
+    const dist = Math.abs(top - list.scrollTop);
+    scrollListTo(top, smooth ? Math.min(560, 280 + dist * 0.25) : 0);
+    if (pulse) {
+      el.classList.remove('is-located');
+      void el.offsetWidth;
+      el.classList.add('is-located');
+      el.addEventListener('animationend', () => el.classList.remove('is-located'), { once: true });
+    }
   }
 
   list.addEventListener('click', (e) => {
@@ -107,7 +146,10 @@ export function createSheet(engine, { onToggleLyrics, isLyricsOn }) {
 
   document.getElementById('sa-playall').addEventListener('click', () => { close(); engine.playAt(0); });
   document.getElementById('sa-mode').addEventListener('click', () => engine.cycleMode());
-  document.getElementById('sa-locate').addEventListener('click', () => { search.value = ''; renderList(); locateCurrent(); });
+  document.getElementById('sa-locate').addEventListener('click', () => {
+    if (search.value) { search.value = ''; renderList(); }
+    locateCurrent(true);
+  });
   document.getElementById('sa-lyric').addEventListener('click', () => { onToggleLyrics(); renderLyricLabel(); });
   function renderLyricLabel() { lyricLabel.textContent = isLyricsOn() ? '隐藏歌词' : '显示歌词'; }
 
@@ -128,7 +170,8 @@ export function createSheet(engine, { onToggleLyrics, isLyricsOn }) {
     app.classList.add('sheet-open');
     sheet.style.transition = `transform ${OPEN_MS}ms cubic-bezier(.32,.72,0,1)`;
     sheet.style.transform = '';
-    requestAnimationFrame(() => locateCurrent(false));
+    // 打开即自动定位到当前歌曲（等一帧布局完成；弹窗 transform 不影响相对位置）
+    requestAnimationFrame(() => locateCurrent(false, false));
     setTimeout(() => { if (isOpen) sheet.focus({ preventScroll: true }); }, 50);
   }
 
@@ -198,6 +241,7 @@ export function createSheet(engine, { onToggleLyrics, isLyricsOn }) {
 
   return {
     setTracks(list_) { tracks = list_; countEl.textContent = `共 ${tracks.length} 首`; },
+    locateCurrent,
     open, close, isOpen: () => isOpen,
   };
 }
