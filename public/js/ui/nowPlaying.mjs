@@ -56,7 +56,12 @@ function rgbToHsl(r, g, b) {
   return { h, s: s * 100, l: l * 100 };
 }
 
-export function createNowPlaying(engine) {
+/**
+ * @param clock 歌词时钟（lyricClock.mjs）
+ * @param onLyrics 歌词载入后 (track, data|null)，迷你歌词条用
+ * @param onCover  封面载入后 (track, img|null)，流体背景取色用
+ */
+export function createNowPlaying(engine, { clock, onLyrics, onCover } = {}) {
   const app = document.getElementById('app');
   const covers = [document.getElementById('bg-cover-a'), document.getElementById('bg-cover-b')];
   const meta = document.getElementById('meta');
@@ -84,7 +89,7 @@ export function createNowPlaying(engine) {
   });
 
   createDiscCarousel(engine);
-  const lyrics = createLyricsView(engine);
+  const lyrics = createLyricsView(engine, clock, { onData: onLyrics });
 
   /* ---------------- 背景氛围色 ---------------- */
   function applyTint({ h, s }) {
@@ -100,11 +105,14 @@ export function createNowPlaying(engine) {
     if (!track.coverUrl) {
       covers.forEach((c) => c.classList.remove('is-on'));
       applyTint(DEFAULT_TINT);
+      onCover?.(track, null);
       return;
     }
     const img = new Image();
+    img.onerror = () => onCover?.(track, null);
     img.onload = () => {
       applyTint(extractTint(img));
+      onCover?.(track, img);
       coverLayer = 1 - coverLayer;
       const next = covers[coverLayer];
       next.style.backgroundImage = `url("${track.coverUrl}")`;
@@ -165,7 +173,9 @@ export function createNowPlaying(engine) {
 
   /* ---------------- 切歌 ---------------- */
   let first = true;
+  let current = null;
   engine.on('trackchange', ({ track }) => {
+    current = track;
     setMeta(track, !first);
     setBackground(track);
     lyrics.render(track);
@@ -178,6 +188,8 @@ export function createNowPlaying(engine) {
 
   return {
     toggleLyrics,
+    /** 服务端通知这些曲目的 .lrc 变了：正在播放的就重新加载歌词 */
+    reloadLyrics(ids) { if (current && ids?.includes(current.id)) lyrics.render(current); },
     isLyricsOn: () => !app.classList.contains('lyrics-off'),
   };
 }

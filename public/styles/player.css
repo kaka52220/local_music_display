@@ -304,12 +304,13 @@ input[type="search"]:focus-visible, .progress:focus-visible { outline: none; box
 /* 逐字高亮：行内 .kara 用渐变 + background-clip:text 着色；--fill = 已唱到的横带位置（px），--lit = 已唱部分颜色。
    --lit 注册为 <color> 才能过渡：当前行 → 白；离开焦点后 → 底色（已唱完的行慢慢褪成灰）。 */
 @property --lit { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, .45); }
-.lyrics-box { --kara-base: var(--text-3); --kara-feather: .55em; }
+.lyrics-box { --kara-base: var(--text-3); --kara-feather: .4em; }
 .kara {
   --fill: 0px;
   --lit: var(--kara-base);
   color: transparent;
-  background-image: linear-gradient(90deg, var(--lit) calc(var(--fill) - var(--kara-feather)), var(--kara-base) calc(var(--fill) + var(--kara-feather)));
+  /* 羽化在 --fill 之后拖尾（v9）：--fill 之前一个字也不提前点亮，亮度从 --fill−2×羽化 渐变到 --fill */
+  background-image: linear-gradient(90deg, var(--lit) calc(var(--fill) - 2 * var(--kara-feather)), var(--kara-base) var(--fill));
   background-repeat: no-repeat;
   -webkit-background-clip: text; background-clip: text;
   -webkit-box-decoration-break: slice; box-decoration-break: slice; /* 换行后各视觉行首尾相接，渐变按阅读顺序跨行 */
@@ -952,42 +953,6 @@ input[type="search"]:focus-visible, .progress:focus-visible { outline: none; box
 }
 
 /* ============================================================
-   v8：进度条上的「高潮」提示点
-   ============================================================ */
-.progress-wrap { position: relative; width: 100%; height: 100%; display: flex; align-items: center; }
-.chorus-dot {
-  --f: 0;
-  position: absolute; top: 50%; z-index: 1;
-  /* 原生 range 拇指中心的行程是 [拇指宽/2, 宽 - 拇指宽/2]（拇指 10px） */
-  left: calc(5px + (100% - 10px) * var(--f));
-  width: 22px; height: 22px; margin: -11px 0 0 -11px; padding: 0;
-  border: none; background: none; cursor: pointer; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  animation: dot-in .5s cubic-bezier(.3, 1.5, .5, 1);
-}
-.chorus-dot i {
-  width: 4px; height: 4px; border-radius: 50%; background: rgba(255, 255, 255, .9);
-  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .25), 0 0 6px rgba(255, 255, 255, .35);
-  transition: transform .2s cubic-bezier(.3, 1.6, .5, 1), background .2s;
-}
-.dock-slider .chorus-dot i { width: 5px; height: 5px; }
-.chorus-dot:active i { transform: scale(1.6); }
-@media (hover: hover) and (pointer: fine) { .chorus-dot:hover i { transform: scale(1.6); background: #fff; } }
-.chorus-tip {
-  position: absolute; bottom: calc(100% + 2px); left: 50%;
-  padding: 3px 8px; border-radius: 999px; white-space: nowrap;
-  background: rgba(30, 28, 30, .86); color: rgba(255, 255, 255, .9); font-size: 11px; letter-spacing: .5px;
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, .3), inset 0 0 0 1px rgba(255, 255, 255, .08);
-  opacity: 0; transform: translate(-50%, 4px) scale(.9); pointer-events: none;
-  transition: opacity .18s ease, transform .22s cubic-bezier(.3, 1.4, .5, 1);
-}
-.chorus-dot.show-tip .chorus-tip, .chorus-dot:focus-visible .chorus-tip { opacity: 1; transform: translate(-50%, 0) scale(1); }
-@media (hover: hover) and (pointer: fine) { .chorus-dot:hover .chorus-tip { opacity: 1; transform: translate(-50%, 0) scale(1); } }
-.chorus-dot:focus-visible { outline: none; box-shadow: none; }
-@keyframes dot-in { from { transform: scale(0); opacity: 0; } }
-
-/* ============================================================
    响应式：窄屏上下堆叠
    ============================================================ */
 @media (max-width: 900px) {
@@ -1018,4 +983,142 @@ input[type="search"]:focus-visible, .progress:focus-visible { outline: none; box
 @media (prefers-reduced-motion: reduce) {
   .bg-glow { animation: none; }
   .layout-pop, .lp-opt { transition-duration: .01s !important; }
+}
+
+/* ============================================================
+   v9：背景样式「流体」——小 canvas 封面色网格渐变，CSS 拉伸铺满
+   ============================================================ */
+.bg-fluid {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  opacity: 0; transition: opacity .9s var(--ease);
+}
+.app[data-bg="fluid"] .bg-fluid { opacity: .92; }
+.app[data-bg="fluid"] .bg-cover.is-on { opacity: 0; }
+.app[data-bg="fluid"] .bg-glow { opacity: .06; }
+/* 流体背景每帧都在变：底栏的毛玻璃会被迫每帧重算模糊，这里换成纯半透明（背后本来就是柔和渐变） */
+.app[data-bg="fluid"] .bar { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(0, 0, 0, .16); }
+
+/* 布局弹窗里的「背景」分段选择 */
+.lp-section {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 16px; padding: 14px 4px 0; border-top: 1px solid rgba(255, 255, 255, .07);
+}
+.lp-label { font-size: 13.5px; font-weight: 500; color: #fff; }
+.lp-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 11px; background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05); }
+.lp-seg-opt {
+  border: none; background: none; cursor: pointer; font: inherit; font-size: 13px;
+  padding: 7px 16px; border-radius: 8px; color: var(--text-2);
+  transition: background .22s var(--ease), color .2s, box-shadow .22s;
+}
+.lp-seg-opt[aria-checked="true"] { color: #fff; background: rgba(236, 65, 65, .2); box-shadow: inset 0 0 0 1px rgba(236, 65, 65, .7); }
+@media (hover: hover) and (pointer: fine) { .lp-seg-opt:not([aria-checked="true"]):hover { color: #fff; background: rgba(255, 255, 255, .06); } }
+
+/* ============================================================
+   v9：歌词时间微调  [−] 歌词 +0.3s [+]
+   ============================================================ */
+.lyric-offset {
+  position: absolute; right: 6px; bottom: 8px; z-index: 3;
+  display: flex; align-items: center; gap: 2px; padding: 2px;
+  border-radius: 999px; background: rgba(255, 255, 255, .05);
+  opacity: .5; transition: opacity .25s ease;
+}
+.lyric-offset:focus-within, .lyric-offset.is-set { opacity: .9; }
+@media (hover: hover) and (pointer: fine) { .lyric-offset:hover { opacity: .95; } }
+/* 没有时间轴的歌词不需要微调 */
+.lyrics-wrap:not(:has(.lyrics-box.synced)) .lyric-offset, .mini:not(.is-synced) .lyric-offset { opacity: 0; pointer-events: none; }
+.lo-btn {
+  width: 32px; height: 32px; border: none; border-radius: 50%; background: none; cursor: pointer;
+  color: var(--text-2); font: 400 19px/1 var(--font);
+  transition: color .2s, transform .2s cubic-bezier(.3, 1.5, .5, 1);
+}
+.lo-btn:active { transform: scale(.86); }
+.lo-val {
+  min-width: 78px; height: 28px; padding: 0 6px; border: none; border-radius: 999px; background: none; cursor: pointer;
+  color: var(--text-2); font: 500 12.5px/28px var(--font); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.lyric-offset.is-set .lo-val { color: #fff; }
+.lo-val.is-pulse { animation: lo-pulse .32s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes lo-pulse { 40% { transform: scale(1.12); } }
+@media (hover: hover) and (pointer: fine) { .lo-btn:hover, .lo-val:hover { color: #fff; } }
+
+/* ============================================================
+   v9：迷你歌词条
+   ============================================================ */
+.mini {
+  --mini-fs: clamp(26px, 3.5vw, 50px);
+  --kara-base: rgba(255, 255, 255, .36); --kara-feather: .4em;
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: 0 4vw;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .3s ease, visibility 0s linear .3s;
+}
+.app.is-mini .mini { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity .42s ease .06s, visibility 0s; }
+#btn-sheet, #btn-mini { transition: opacity .35s ease, visibility 0s linear 0s; }
+.app.is-mini .stage, .app.is-mini .bar, .app.is-mini #btn-sheet, .app.is-mini #btn-mini {
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .3s ease, visibility 0s linear .3s;
+}
+.mini-card {
+  position: relative;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
+  gap: clamp(18px, 2.4vw, 34px);
+  width: min(1120px, 100%);
+  padding: clamp(16px, 2.4vh, 26px) clamp(18px, 2.2vw, 30px);
+  border-radius: 28px;
+  /* 封面氛围色（--glow，随切歌过渡）混进半透明深色底 */
+  background-color: color-mix(in srgb, var(--glow) 22%, rgba(18, 16, 18, .62));
+  border: 1px solid rgba(255, 255, 255, .08);
+  box-shadow: 0 34px 90px -24px rgba(0, 0, 0, .65), 0 8px 24px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255, 255, 255, .08);
+  transition: background-color 1.2s var(--ease);
+}
+.mini-cover {
+  width: clamp(84px, 12vh, 132px); aspect-ratio: 1; border-radius: 16px; overflow: hidden;
+  background: #2b2b2b; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 12px 30px -6px rgba(0, 0, 0, .5);
+}
+.mini-cover img, .cover-fly img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.mini-cover svg, .cover-fly svg { width: 30%; height: 30%; }
+.mini-cover.is-flying, .disc-cover.is-flying { visibility: hidden; }
+.mini-text, .mini-ctrl { transition: transform .5s cubic-bezier(.2, .9, .3, 1), opacity .4s ease; }
+.app:not(.is-mini) .mini-text { transform: translateY(14px); opacity: 0; }
+.app:not(.is-mini) .mini-ctrl { transform: translateX(14px); opacity: 0; }
+.mini-text { min-width: 0; }
+.mini-lines { display: grid; min-height: calc(var(--mini-fs) * 1.32 * 2); align-items: center; }
+.mini-line {
+  grid-area: 1 / 1; margin: 0; min-width: 0;
+  font-size: var(--mini-fs); font-weight: 600; line-height: 1.32; letter-spacing: .5px;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  transition: transform .45s cubic-bezier(.2, .9, .3, 1), opacity .38s ease;
+}
+.mini .kara { --lit: #fff; transition: none; }
+.mini-line.is-in { transform: translateY(42%); opacity: 0; transition: none; }
+.mini-line.is-out { transform: translateY(-42%); opacity: 0; }
+.mini-next {
+  margin: 4px 0 0; font-size: calc(var(--mini-fs) * .48); line-height: 1.4; color: rgba(255, 255, 255, .36);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mini-next.swap { animation: mini-next-in .45s ease; }
+@keyframes mini-next-in { from { opacity: 0; transform: translateY(30%); } }
+.mini-meta { margin: 10px 0 0; font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-ctrl { display: flex; align-items: center; gap: clamp(6px, 1vw, 14px); }
+.mini-ctrl .icon-btn { width: 46px; height: 46px; padding: 9px; color: rgba(255, 255, 255, .86); }
+.mini-ctrl .play-btn { width: 60px; height: 60px; padding: 8px; color: #fff; }
+#mini-exit { color: var(--text-2); }
+.mini .lyric-offset { position: static; }
+/* 封面飞行（共享元素转场）：盒子在终点，由 transform 从起点反推过来 */
+.cover-fly {
+  position: fixed; z-index: 60; overflow: hidden; pointer-events: none;
+  background: #2b2b2b; display: flex; align-items: center; justify-content: center;
+  transform-origin: 50% 50%; will-change: transform;
+  box-shadow: 0 14px 36px -8px rgba(0, 0, 0, .5);
+}
+@media (max-width: 760px) {
+  .mini-card { grid-template-columns: auto minmax(0, 1fr); }
+  .mini-ctrl { grid-column: 1 / -1; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mini, .mini-text, .mini-ctrl, .mini-line, .stage, .bar { transition-duration: .01s !important; }
+  .mini-next.swap, .lo-val.is-pulse { animation: none; }
+  .mini-card { transition: none; }
 }

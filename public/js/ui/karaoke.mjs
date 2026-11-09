@@ -77,7 +77,22 @@ export function measure(kara, timing) {
   const real = rects.reduce((a, r) => a + r.width, 0) / scale;
   const k = x > 0 && real > 0 ? real / x : 1;
   geo.forEach((g) => { g.x0 *= k; g.x1 *= k; });
-  return { geo, total: real || x };
+  // 渐变尾巴宽度 = 2 × --kara-feather（羽化在填充位置之后"拖尾"，不在前面"抢跑"）
+  const feather = parseFloat(cs.getPropertyValue('--kara-feather')) || 0.4;
+  const tail = 2 * feather * (parseFloat(cs.fontSize) || 16);
+  return { geo, total: real || x, tail };
+}
+
+/**
+ * 唱完最后一个字后，填充继续按最后一个字的速度再走一个"尾巴"宽度，让末字也完全点亮（不会突变）。
+ * 返回需要额外加上的 px。
+ */
+export function fillPast(timing, m, t) {
+  const last = timing[timing.length - 1];
+  if (!last || t <= last.end) return 0;
+  const g = m.geo[m.geo.length - 1];
+  const speed = (g.x1 - g.x0) / Math.max(0.05, last.end - last.start);
+  return Math.min(m.tail + 2, (t - last.end) * Math.max(speed, 40));
 }
 
 /** 时间 t 时应点亮到横带上的位置（px） */

@@ -56,6 +56,6 @@ export function toPublicTrack(track) {
     format: track.format,
     hasCover: track.hasCover,
     streamUrl: `/api/stream/${track.id}`,
-    coverUrl: track.hasCover ? `/api/cover/${track.id}` : null,
+    coverUrl: track.hasCover ? `/api/cover/${track.id}${track.rev ? `?v=${track.rev}` : ''}` : null,
   };
 }

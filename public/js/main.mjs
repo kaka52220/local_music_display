@@ -3,7 +3,7 @@
  * 依赖方向 main -> engine/ui -> api/state，各模块不在此之外互相耦合。
  * 进入页面即播放主界面；没有独立的选歌页面，选歌统一在歌单弹窗中完成。
  */
-import { fetchTracks } from './api/client.mjs';
+import { fetchTracks, subscribeEvents } from './api/client.mjs';
 import { createPlayerEngine } from './player/engine.mjs';
 import { createNowPlaying } from './ui/nowPlaying.mjs';
 import { createSheet } from './ui/sheet.mjs';
@@ -12,13 +12,24 @@ import { loadSession, saveSession } from './state/persistence.mjs';
 import { initPressFeedback } from './ui/pressFeedback.mjs';
 import { createSleepTimer } from './ui/sleepTimer.mjs';
 import { createFullscreenToggle } from './ui/fullscreen.mjs';
-import { createChorusMarker } from './ui/chorusMarker.mjs';
+import { createLyricClock } from './player/lyricClock.mjs';
+import { createLyricOffsetControls } from './ui/lyricOffset.mjs';
+import { createBackgroundStyle } from './ui/fluidBackground.mjs';
+import { createMiniLyrics } from './ui/miniLyrics.mjs';
 
 const engine = createPlayerEngine();
 initPressFeedback();
 // 调试/自动化测试（?audiodebug）：暴露引擎
 if (new URLSearchParams(location.search).has('audiodebug')) window.__engine = engine;
-const nowPlaying = createNowPlaying(engine);
+// 歌词时钟：输出延迟补偿 + 默认延后 + 用户偏移 + [offset:]，播放页与迷你歌词条共用
+const clock = createLyricClock(engine);
+const background = createBackgroundStyle();
+let mini = null;
+const nowPlaying = createNowPlaying(engine, {
+  clock,
+  onLyrics: (track, data) => mini?.setLyrics(track, data),
+  onCover: (track, img) => background.setCover(img),
+});
 const sheet = createSheet(engine, {
   onToggleLyrics: nowPlaying.toggleLyrics,
   isLyricsOn: nowPlaying.isLyricsOn,
@@ -28,9 +39,10 @@ const layout = createLayout(engine, {
   isLyricsOn: nowPlaying.isLyricsOn,
 });
 const sleep = createSleepTimer(engine);
+mini = createMiniLyrics(engine, clock);
+createLyricOffsetControls(clock);
 createFullscreenToggle();
-createChorusMarker(engine);
-if (new URLSearchParams(location.search).has('audiodebug')) window.__sleep = sleep;
+if (new URLSearchParams(location.search).has('audiodebug')) Object.assign(window, { __sleep: sleep, __clock: clock, __mini: mini });
 
 // 首次用户手势时解锁 Web Audio（自动播放策略要求 AudioContext 在手势中创建/恢复）；之后每次手势都确保它在运行
 ['pointerdown', 'keydown', 'touchend'].forEach((type) => document.addEventListener(type, () => engine.unlock(), { capture: true, passive: true }));
@@ -73,8 +85,10 @@ window.addEventListener('beforeunload', () => {
 });
 
 /* ---------------- 启动：加载曲目并恢复上次会话 ---------------- */
+let libraryVersion = -1;
 try {
-  const tracks = await fetchTracks();
+  const { version, tracks } = await fetchTracks();
+  libraryVersion = version;
   engine.setQueue(tracks);
   sheet.setTracks(tracks);
 
@@ -99,3 +113,19 @@ try {
 } catch (error) {
   document.getElementById('big-title').textContent = error.message || '加载曲目失败';
 }
+
+/* ---------------- 音乐库自动更新（SSE） ---------------- */
+// 服务端监听音乐目录，增删歌曲后推送新列表；按 id 合并进播放队列，不打断正在播放的歌
+function applyLibrary({ version, tracks }) {
+  if (!Array.isArray(tracks) || version === libraryVersion) return;
+  libraryVersion = version;
+  engine.updateQueue(tracks);
+  // 原来是空目录：放进第一首歌后直接选中（暂停），让唱片/歌词出现
+  if (engine.getIndex() < 0 && tracks.length) engine.playAt(0, false);
+}
+subscribeEvents({
+  // （重）连上时版本不一致：断线期间有变化，重新拉一次
+  onHello: ({ version }) => { if (libraryVersion >= 0 && version !== libraryVersion) fetchTracks().then(applyLibrary).catch(() => {}); },
+  onLibrary: applyLibrary,
+  onLyrics: ({ ids }) => nowPlaying.reloadLyrics(ids),
+});

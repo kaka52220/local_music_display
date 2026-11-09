@@ -175,6 +175,14 @@ export function createDiscCarousel(engine) {
     settle();
   });
 
+  // 音乐库自动更新：队列变了（索引可能整体平移），按新索引重设当前/左右唱片；动画中则等落定后再补邻居
+  engine.on('queuechange', ({ index }) => {
+    if (shownIndex < 0 || index < 0) return;
+    shownIndex = index;
+    idxOf.set(roles.get(0), index);
+    if (!raf && !dragging) fillNeighbors();
+  });
+
   engine.on('modechange', () => { if (!raf && !dragging && shownIndex >= 0) setCover(roles.get(1), engine.peekNext()); });
 
   // 按钮切歌前先告知方向（捕获阶段，早于 transport 的点击处理）

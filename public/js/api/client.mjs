@@ -5,8 +5,21 @@
 export async function fetchTracks() {
   const res = await fetch('/api/tracks');
   if (!res.ok) throw new Error('加载曲目失败');
-  const data = await res.json();
-  return data.tracks;
+  return res.json(); // { version, tracks }
+}
+
+/**
+ * 订阅服务端推送（SSE）：音乐库变化 / 歌词文件变化。EventSource 断线后自动重连；
+ * 每次（重新）连上都会收到 hello（含库版本），版本不同说明断线期间有变化，交给调用方重新拉取。
+ */
+export function subscribeEvents({ onHello, onLibrary, onLyrics }) {
+  if (typeof EventSource === 'undefined') return () => {};
+  const es = new EventSource('/api/events');
+  const parse = (fn) => (e) => { try { fn(JSON.parse(e.data)); } catch { /* 忽略坏消息 */ } };
+  es.addEventListener('hello', parse(onHello));
+  es.addEventListener('library', parse(onLibrary));
+  es.addEventListener('lyrics', parse(onLyrics));
+  return () => es.close();
 }
 
 export async function fetchLyrics(id) {
@@ -15,18 +28,3 @@ export async function fetchLyrics(id) {
   return res.json();
 }
 
-/** 高潮点：服务端缓存 / 歌词 [chorus:] 覆盖；没有时 time 为 null */
-export async function fetchChorus(id) {
-  try {
-    const res = await fetch(`/api/chorus/${id}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return Number.isFinite(data?.time) ? data : null;
-  } catch { return null; }
-}
-
-export async function saveChorus(id, result) {
-  try {
-    await fetch(`/api/chorus/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(result) });
-  } catch { /* 离线等：只留在本地缓存 */ }
-}

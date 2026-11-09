@@ -49,6 +49,7 @@ export function createPlayerEngine() {
   let queue = [];
   let index = -1;
   let mode = PLAY_MODE.SEQUENCE;
+  let orphanId = null; // 正在播放的歌已从音乐库删除：先留在队列里播完，切走时再移除
   let upcoming = -1; // 随机模式下预先抽好的"下一首"，保证唱片预览与实际切换一致
   let volume = 1;
   let muted = false;
@@ -336,7 +337,53 @@ export function createPlayerEngine() {
     preloadTimer = setTimeout(schedulePreload, 1000);
   }
 
+  /**
+   * 换一份新的曲目列表（音乐库自动更新），按 id 保持当前曲目、预加载元素与随机模式的"下一首"，
+   * 不打断播放。当前曲目已被删除时，把它暂留在原位置，切到别的歌时再移除。
+   */
+  function updateQueue(tracks) {
+    const idAt = (i) => queue[i]?.id;
+    const cur = queue[index];
+    const slotIds = new Map(pool.map((el) => [el, idAt(slotOf.get(el))]));
+    const upId = idAt(upcoming);
+    const next = tracks.slice();
+    let ni = cur ? next.findIndex((t) => t.id === cur.id) : -1;
+    if (cur && ni < 0) {
+      ni = Math.min(index, next.length);
+      next.splice(ni, 0, cur);
+      orphanId = cur.id;
+    } else if (cur && orphanId === cur.id) orphanId = null; // 删了又放回来
+    const posOf = new Map(next.map((t, i) => [t.id, i]));
+    queue = next;
+    index = ni;
+    for (const [el, id] of slotIds) {
+      if (el === audio) { if (index >= 0) slotOf.set(el, index); continue; }
+      if (id !== undefined && posOf.has(id)) slotOf.set(el, posOf.get(id)); else slotOf.delete(el);
+    }
+    upcoming = upId !== undefined && posOf.has(upId) && posOf.get(upId) !== index ? posOf.get(upId) : -1;
+    emit('queuechange', { queue, index });
+  }
+
+  /** 切歌前：把暂留的"已删除曲目"从队列移除，返回调整后的目标索引 */
+  function dropOrphan(target) {
+    if (!orphanId || queue[target]?.id === orphanId) return target;
+    const oi = queue.findIndex((t) => t.id === orphanId);
+    orphanId = null;
+    if (oi < 0) return target;
+    const fix = (i) => (i === oi ? -1 : i > oi ? i - 1 : i);
+    queue = queue.filter((_, i) => i !== oi);
+    for (const el of pool) {
+      const j = fix(slotOf.get(el));
+      if (j >= 0) slotOf.set(el, j); else slotOf.delete(el);
+    }
+    upcoming = fix(upcoming);
+    index = fix(index);
+    emit('queuechange', { queue, index });
+    return fix(target);
+  }
+
   function loadAt(nextIndex, autoplay = true) {
+    nextIndex = dropOrphan(nextIndex);
     if (nextIndex < 0 || nextIndex >= queue.length) return;
     const prevEl = audio;
     const prevIndex = index;
@@ -360,7 +407,7 @@ export function createPlayerEngine() {
       audio.src = track.streamUrl;
     }
     if (audio !== prevEl) {
-      slotOf.set(prevEl, prevIndex); // 旧元素保留在池中（作为"上一首"的预加载）
+      if (prevIndex >= 0) slotOf.set(prevEl, prevIndex); else slotOf.delete(prevEl); // 旧元素保留在池中（作为"上一首"的预加载）
       if (fadeOld) fadeTo(prevEl, 0, FADE.switchOut).then((done) => { if (done && prevEl !== audio) prevEl.pause(); });
       else prevEl.pause();
     }
@@ -464,6 +511,7 @@ export function createPlayerEngine() {
       index = -1;
       pool.forEach((el) => slotOf.delete(el));
     },
+    updateQueue,
     playAt: loadAt,
     toggle() {
       if (!intent) {
@@ -493,6 +541,16 @@ export function createPlayerEngine() {
       setTimeout(() => { if (seekTarget === t && !audio.seeking && !seekDip) seekTarget = null; }, 1500);
     },
     getCurrentTime: currentTime,
+    /**
+     * 当前元素经 Web Audio 输出时，"audio.currentTime 读到的位置"比"扬声器里正在响的声音"超前的时长（秒）：
+     * AudioContext.baseLatency（图处理缓冲）+ outputLatency（系统/蓝牙输出缓冲）。走原生输出时返回 0
+     * （此时浏览器的媒体管线已按输出设备延迟换算 currentTime）。
+     */
+    getOutputLatency() {
+      if (!actx || !gains.has(audio)) return 0;
+      const v = (actx.baseLatency || 0) + (actx.outputLatency || 0);
+      return Number.isFinite(v) ? v : 0;
+    },
     /** 暂停（带短淡出），与 toggle 不同：已暂停时什么也不做 */
     pause() { if (intent) pauseSmooth(); },
     /**

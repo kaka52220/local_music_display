@@ -238,9 +238,21 @@ export function createSheet(engine, { onToggleLyrics, isLyricsOn }) {
   engine.on('trackchange', () => { if (isOpen) { renderHead(); renderList(); } });
   engine.on('playstate', syncPlaying);
   engine.on('modechange', renderMode);
+  // 音乐库自动更新：列表跟随引擎队列（打开着也就地刷新，滚动位置不变）
+  engine.on('queuechange', ({ queue }) => setTracks(queue));
+
+  function setTracks(list_) {
+    tracks = list_;
+    countEl.textContent = `共 ${tracks.length} 首`;
+    if (isOpen) {
+      const top = list.scrollTop;
+      renderHead(); renderList();
+      list.scrollTop = top;
+    }
+  }
 
   return {
-    setTracks(list_) { tracks = list_; countEl.textContent = `共 ${tracks.length} 首`; },
+    setTracks,
     locateCurrent,
     open, close, isOpen: () => isOpen,
   };

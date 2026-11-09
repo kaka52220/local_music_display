@@ -3,7 +3,7 @@
  * 按下即出现，松手 / 取消 / 移出后淡出并移除——不留下任何"选中框"状态。
  * 键盘触发（Enter/Space）时从中心出现一次。
  */
-const SELECTOR = '.sheet-action, .song, .ghost-btn, .lp-opt, .scrub-play, .dock-actions .icon-btn, #now-mode, #now-playlist, .sleep-btn, .sl-close, .sl-opt';
+const SELECTOR = '.sheet-action, .song, .ghost-btn, .lp-opt, .scrub-play, .dock-actions .icon-btn, #now-mode, #now-playlist, .sleep-btn, .sl-close, .sl-opt, .mini-ctrl .icon-btn, .lo-btn, .lp-seg-opt';
 const MIN_VISIBLE_MS = 180;
 
 export function initPressFeedback(root = document) {

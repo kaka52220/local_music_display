@@ -21,6 +21,4 @@ export const config = {
   port: Number(process.env.PORT ?? fileConfig.port),
   musicDir: fromRoot(process.env.MUSIC_DIR ?? fileConfig.musicDir),
   supportedFormats: fileConfig.supportedFormats,
-  // 分析结果缓存（高潮点等），默认项目根下 cache/
-  cacheDir: fromRoot(process.env.CACHE_DIR ?? fileConfig.cacheDir ?? 'cache'),
 };

@@ -14,7 +14,7 @@
  */
 import { fetchLyrics } from '../api/client.mjs';
 import { formatTime } from '../util/format.mjs';
-import { buildTiming, measure, fillAt } from './karaoke.mjs';
+import { buildTiming, measure, fillAt, fillPast } from './karaoke.mjs';
 
 // 焦点线位于歌词视区高度的比例：经典布局 0.4；分栏布局由 CSS 变量 --lyric-focus 设为 0.5（正中）
 const DEFAULT_FOCUS = 0.4;
@@ -26,7 +26,11 @@ const SNAP_MS = 280;          // 拖动停稳后吸附
 const FLING_TAU = 325;        // 惯性衰减时间常数（ms）
 const easeOutCubic = (k) => 1 - (1 - k) ** 3;
 
-export function createLyricsView(engine) {
+/**
+ * @param clock 歌词时钟（lyricClock.mjs）：音频时间 → 歌词时间（输出延迟 + 默认延后 + 用户偏移 + [offset:]）
+ * @param onData 歌词载入后回调 (track, data|null)，供迷你歌词条复用同一份歌词
+ */
+export function createLyricsView(engine, clock, { onData } = {}) {
   const wrap = document.getElementById('lyrics-wrap');
   const box = document.getElementById('lyrics-box');
   const inner = document.getElementById('lyrics-inner');
@@ -123,6 +127,8 @@ export function createLyricsView(engine) {
     let data = null;
     try { data = await fetchLyrics(track.id); } catch { data = null; }
     if (token !== renderToken) return;
+    clock.setTrackOffset(data?.offset || 0);
+    onData?.(track, data && data.lines.length ? data : null);
     if (!data || !data.lines.length) { swapIn(() => setPlaceholder('纯音乐，请欣赏')); return; }
 
     swapIn(() => {
@@ -152,7 +158,7 @@ export function createLyricsView(engine) {
       activeIndex = -1;
       if (updateEdgePadding()) {
         const t = engine.getCurrentTime();
-        if (synced && t > 0) sync(t, false);
+        if (synced && t > 0) sync(clock.map(t), false);
         else scrollToLine(lines[0].el, false);
       }
     });
@@ -178,7 +184,7 @@ export function createLyricsView(engine) {
     if (!synced || !lines.length) return;
     let idx = -1;
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].time <= currentTime + 0.15) idx = i;
+      if (lines[i].time <= currentTime) idx = i; // 不提前：歌词时钟已含延后，换行与歌声对齐或略晚
       else break;
     }
     while (idx > 0 && !lines[idx].text) idx--;
@@ -187,7 +193,7 @@ export function createLyricsView(engine) {
       if (prev) {
         prev.el.classList.remove('active');
         // 向后走：上一行保持全亮，随 --lit 过渡慢慢褪成灰色；向前跳（拖回去）：清空
-        setFill(prev, idx > activeIndex && prev.geo ? prev.geo.total + 40 : 0);
+        setFill(prev, idx > activeIndex && prev.geo ? prev.geo.total + prev.geo.tail + 2 : 0);
       }
       activeIndex = idx;
       lines[idx]?.el.classList.add('active');
@@ -206,7 +212,7 @@ export function createLyricsView(engine) {
     const line = lines[activeIndex];
     if (!line?.timing) return;
     if (!line.geo) line.geo = measure(line.kara, line.timing);
-    setFill(line, fillAt(line.timing, line.geo.geo, t));
+    setFill(line, fillAt(line.timing, line.geo.geo, t) + fillPast(line.timing, line.geo, t));
   }
 
   /* ---------------- 定位模式 ---------------- */
@@ -284,7 +290,7 @@ export function createLyricsView(engine) {
 
   function seekTo(line) {
     if (!line) return;
-    engine.seek(line.time);
+    engine.seek(clock.toAudio(line.time)); // 让音频落在"与这句对齐"的位置，避免先显示上一句再跳回
     if (!engine.isPlaying()) engine.toggle();
     exitScrub(false);
     activeIndex = -2; // 强制下一次 sync 重新定位
@@ -364,7 +370,9 @@ export function createLyricsView(engine) {
     if (anchor) scrollToLine(anchor.el, false);
   }).observe(box);
 
-  engine.on('timeupdate', ({ currentTime }) => sync(currentTime));
+  engine.on('timeupdate', ({ currentTime }) => sync(clock.map(currentTime)));
+  // 调整偏移：立即按新时钟重定位（暂停时也生效）
+  clock.onChange(() => { if (synced && lines.length) sync(clock.now(), true); });
 
   return { render, isScrubbing: () => scrubbing };
 }
