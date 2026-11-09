@@ -12,6 +12,7 @@ import { listTracks } from './api/tracks.mjs';
 import { streamTrack } from './api/stream.mjs';
 import { coverTrack } from './api/cover.mjs';
 import { getLyrics } from './api/lyrics.mjs';
+import { getChorusApi, postChorusApi } from './api/chorus.mjs';
 import { library } from './services/library.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -24,6 +25,8 @@ const apiRouter = createRouter([
   { method: 'HEAD', pattern: '/api/stream/:id', handler: streamTrack },
   { method: 'GET', pattern: '/api/cover/:id', handler: coverTrack },
   { method: 'GET', pattern: '/api/lyrics/:id', handler: getLyrics },
+  { method: 'GET', pattern: '/api/chorus/:id', handler: getChorusApi },
+  { method: 'POST', pattern: '/api/chorus/:id', handler: postChorusApi },
 ]);
 
 const server = createServer((req, res) => {

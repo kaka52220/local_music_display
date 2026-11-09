@@ -44,6 +44,9 @@ npm start
 - 播放 / 暂停、上一首 / 下一首（图标唯一，随状态切换）
 - 可拖动进度条（HTTP Range 分段加载）；音量 UI 已移除，引擎音量仍按上次会话恢复
 - 三种播放模式：顺序播放、单曲循环、随机播放
+- **定时关闭**（v8）：0–90 分钟滑轨 / 播完本首后关闭，到点 4 秒淡出后暂停，按钮显示实时倒计时
+- **高潮提示点**（v8）：歌词重复段落 + 音频能量估算副歌起点，进度线上小白点，点击跳转；可用 `[chorus:mm:ss]` 手动指定
+- **全屏按钮 + 添加到主屏幕**（v8）：见 `平板访问说明.md`
 - UI 评审机制：`docs/ui-review-rubric.md` 为固定清单，每次设计后逐项评审、出指导意见再修改
 
 ## 架构与目录
@@ -56,7 +59,7 @@ music/                   内置示例曲目（128kbps MP3 + 同名 .lrc）
 server/core/             配置、路由、静态服务、MIME
 server/domain/track.mjs  Track 领域模型与对外 DTO
 server/services/         扫描建库 library、元数据 metadata、歌词 lyrics
-server/api/              tracks / stream(Range) / cover / lyrics
+server/api/              tracks / stream(Range) / cover / lyrics / chorus（高潮点缓存，写入 cache/chorus.json）
 public/                  前端（ES Module 分层：api/state/player/ui）
   js/state/persistence.mjs  会话持久化（曲目/位置/音量，localStorage 容错降级）
   js/player/engine.mjs   播放引擎（封装 audio/队列/模式，不依赖 DOM）

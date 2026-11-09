@@ -30,9 +30,19 @@ function parseWords(content) {
   return words.length ? words : null;
 }
 
+// 手动指定高潮起点：[chorus:mm:ss] 或 [chorus:mm:ss.xx]（扩展 ID 标签）
+const CHORUS_TAG = /^\s*\[chorus:\s*(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\s*\]/im;
+
+/** 读出 [chorus:] 标签（秒），没有返回 null */
+export function parseChorusTag(rawText) {
+  const m = CHORUS_TAG.exec(rawText || '');
+  return m ? Math.round(toSeconds(m[1], m[2], m[3]) * 1000) / 1000 : null;
+}
+
 export function parseLrc(rawText) {
   const text = rawText.replace(/^\uFEFF/, '');
   const timed = [];
+  const chorus = parseChorusTag(text);
 
   for (const rawLine of text.split(/\r?\n/)) {
     const tags = [...rawLine.matchAll(TIME_TAG)];
@@ -55,7 +65,7 @@ export function parseLrc(rawText) {
 
   if (timed.length) {
     timed.sort((a, b) => a.time - b.time);
-    return { synced: true, lines: timed };
+    return chorus !== null ? { synced: true, lines: timed, chorus } : { synced: true, lines: timed };
   }
 
   // 无时间标签：作为纯文本歌词静态展示

@@ -10,6 +10,9 @@ import { createSheet } from './ui/sheet.mjs';
 import { createLayout } from './ui/layout.mjs';
 import { loadSession, saveSession } from './state/persistence.mjs';
 import { initPressFeedback } from './ui/pressFeedback.mjs';
+import { createSleepTimer } from './ui/sleepTimer.mjs';
+import { createFullscreenToggle } from './ui/fullscreen.mjs';
+import { createChorusMarker } from './ui/chorusMarker.mjs';
 
 const engine = createPlayerEngine();
 initPressFeedback();
@@ -24,6 +27,10 @@ const layout = createLayout(engine, {
   toggleLyrics: nowPlaying.toggleLyrics,
   isLyricsOn: nowPlaying.isLyricsOn,
 });
+const sleep = createSleepTimer(engine);
+createFullscreenToggle();
+createChorusMarker(engine);
+if (new URLSearchParams(location.search).has('audiodebug')) window.__sleep = sleep;
 
 // 首次用户手势时解锁 Web Audio（自动播放策略要求 AudioContext 在手势中创建/恢复）；之后每次手势都确保它在运行
 ['pointerdown', 'keydown', 'touchend'].forEach((type) => document.addEventListener(type, () => engine.unlock(), { capture: true, passive: true }));
@@ -54,7 +61,7 @@ engine.on('volumechange', ({ volume, muted }) => {
 
 // 空格键：播放 / 暂停（输入控件、按钮聚焦或歌单打开时除外）
 document.addEventListener('keydown', (event) => {
-  if (event.code !== 'Space' || event.repeat || sheet.isOpen() || layout.isOpen()) return;
+  if (event.code !== 'Space' || event.repeat || sheet.isOpen() || layout.isOpen() || sleep.isOpen()) return;
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'TEXTAREA') return;
   event.preventDefault();

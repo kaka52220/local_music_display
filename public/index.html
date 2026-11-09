@@ -2,8 +2,17 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>本地音乐播放器</title>
+  <!-- 添加到主屏幕：全屏无浏览器边框（manifest display: fullscreen，不支持时回退 standalone） -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#1f1c1e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="本地音乐">
+  <meta name="application-name" content="本地音乐">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="/styles/player.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23ec4141' d='M12 3v10.55A4 4 0 1014 17V7h4V3z'/%3E%3C/svg%3E">
 </head>
@@ -24,7 +33,10 @@
     <!-- ============ 顶部：左上角歌单入口 / 右上角布局样式 ============ -->
     <header class="topbar">
       <button class="ghost-btn" id="btn-sheet" aria-label="打开歌单" aria-haspopup="dialog" aria-expanded="false" title="歌单"></button>
-      <button class="ghost-btn" id="btn-layout" aria-label="布局样式" aria-haspopup="dialog" aria-expanded="false" title="布局样式"></button>
+      <div class="topbar-right">
+        <button class="ghost-btn fs-btn" id="btn-fullscreen" aria-label="全屏" title="全屏" hidden></button>
+        <button class="ghost-btn" id="btn-layout" aria-label="布局样式" aria-haspopup="dialog" aria-expanded="false" title="布局样式"></button>
+      </div>
     </header>
 
     <!-- ============ 舞台：唱片（固定底座 + 滑动黑胶 + 唱臂）/ 信息 + 歌词 ============ -->
@@ -79,6 +91,7 @@
             </div>
             <div class="dock-actions">
               <button class="icon-btn like-btn" id="btn-like" aria-label="喜欢" aria-pressed="false" title="喜欢"></button>
+              <button class="sleep-btn" id="btn-sleep-dock" data-sleep-trigger aria-haspopup="dialog" aria-label="定时关闭" title="定时关闭"></button>
               <button class="icon-btn" id="btn-dock-lyric" aria-label="显示/隐藏歌词" title="歌词"></button>
             </div>
           </div>
@@ -118,7 +131,11 @@
     <!-- ============ 底部控制栏 ============ -->
     <footer class="bar">
       <div class="bar-progress">
-        <input type="range" class="progress" id="now-slider" min="0" max="10000" step="1" value="0" aria-label="播放进度">
+        <div class="progress-wrap" id="progress-wrap">
+          <input type="range" class="progress" id="now-slider" min="0" max="10000" step="1" value="0" aria-label="播放进度">
+          <!-- 副歌/高潮提示点：进度线上的小白点，点它跳到高潮 -->
+          <button class="chorus-dot" id="chorus-dot" aria-label="跳到高潮" title="高潮" hidden><i></i><span class="chorus-tip">高潮</span></button>
+        </div>
       </div>
       <div class="bar-left">
         <div class="bar-track">
@@ -136,6 +153,7 @@
       </div>
       <div class="bar-right">
         <span class="tag tag-quality" id="quality-tag" hidden>MP3</span>
+        <button class="sleep-btn" id="btn-sleep-bar" data-sleep-trigger aria-haspopup="dialog" aria-label="定时关闭" title="定时关闭"></button>
         <button class="icon-btn icon-btn-text is-active" id="btn-lyric" aria-label="显示/隐藏歌词" aria-pressed="true" title="歌词">词</button>
         <div class="volume" id="volume">
           <button class="icon-btn" id="btn-volume" aria-label="静音" title="音量"></button>
@@ -201,6 +219,26 @@
       </label>
       <ul class="sheet-list" id="sheet-list" role="listbox" aria-label="歌曲列表"></ul>
       <div class="sheet-empty" id="sheet-empty" hidden>没有找到匹配的歌曲</div>
+    </section>
+
+    <!-- ============ 定时关闭底部弹窗 ============ -->
+    <div class="sl-scrim" id="sl-scrim"></div>
+    <section class="sleep-sheet" id="sleep-sheet" role="dialog" aria-modal="true" aria-labelledby="sl-title" aria-hidden="true" inert>
+      <header class="sl-head">
+        <h2 class="sl-title" id="sl-title">定时关闭</h2>
+        <button class="sl-close" id="sl-close" aria-label="关闭"></button>
+      </header>
+      <div class="sl-track" id="sl-track" role="slider" tabindex="0" aria-label="定时关闭（分钟）" aria-valuemin="0" aria-valuemax="90" aria-valuenow="0" aria-valuetext="关">
+        <div class="sl-fill" id="sl-fill"></div>
+        <span class="sl-mark" data-v="0">关</span>
+        <span class="sl-mark" data-v="30">30</span>
+        <span class="sl-mark" data-v="60">60</span>
+        <span class="sl-mark" data-v="90">90</span>
+        <div class="sl-thumb" id="sl-thumb"><div class="sl-pill"><span class="sl-num" id="sl-num">关</span></div></div>
+      </div>
+      <button class="sl-opt" id="sl-eot" role="checkbox" aria-checked="false">
+        <span class="sl-check" aria-hidden="true"></span><span>播完本首后关闭</span>
+      </button>
     </section>
   </div>
   <script type="module" src="/js/main.mjs"></script>

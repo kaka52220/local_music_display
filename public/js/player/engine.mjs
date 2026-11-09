@@ -61,6 +61,7 @@ export function createPlayerEngine() {
   let preloadTimer = 0;
   let pendingFadeIn = null; // { el, ms }：该元素真正出声（playing）时开始淡入
   let seekDip = null;       // { el, target, fast }：拖动定位的"压低-定位-淡入"进行中
+  let stopAfterCurrent = false; // 定时关闭"播完本首后关闭"：本首播完即停，不切下一首
   /* ---- 音量包络 ---- */
   let actx = null;
   let master = null;
@@ -264,6 +265,14 @@ export function createPlayerEngine() {
   function bind(el) {
     const cur = (fn) => (e) => { if (el === audio) fn(e); };
     el.addEventListener('ended', cur(() => {
+      if (stopAfterCurrent) {
+        stopAfterCurrent = false;
+        switching = false;
+        pendingFadeIn = null;
+        setIntent(false);
+        emit('sleepstop', { reason: 'track-end' });
+        return;
+      }
       if (mode === PLAY_MODE.LOOP_ONE) {
         el.currentTime = 0;
         tryPlay();
@@ -484,6 +493,29 @@ export function createPlayerEngine() {
       setTimeout(() => { if (seekTarget === t && !audio.seeking && !seekDip) seekTarget = null; }, 1500);
     },
     getCurrentTime: currentTime,
+    /** 暂停（带短淡出），与 toggle 不同：已暂停时什么也不做 */
+    pause() { if (intent) pauseSmooth(); },
+    /**
+     * 定时关闭：用 ms 毫秒把音量缓缓淡到 0，然后暂停（唱臂随播放状态抬起）。
+     * 中途用户暂停/继续/切歌会接管包络，此时返回 false。
+     */
+    sleepFade(ms = 4000) {
+      const el = audio;
+      if (!intent) return Promise.resolve(false);
+      if (el.paused || !audible || !canFade(el)) { pauseSmooth(); emit('sleepstop', { reason: 'timer' }); return Promise.resolve(true); }
+      return fadeTo(el, 0, ms).then((done) => {
+        if (!done || el !== audio || !intent) return false;
+        switching = false;
+        pendingFadeIn = null;
+        setIntent(false);
+        el.pause();
+        emit('sleepstop', { reason: 'timer' });
+        return true;
+      });
+    },
+    /** 本首播完后停止（不切下一首） */
+    setStopAfterCurrent(v) { stopAfterCurrent = Boolean(v); },
+    getStopAfterCurrent: () => stopAfterCurrent,
     getDuration: duration,
     setVolume(value) {
       volume = clamp01(value);

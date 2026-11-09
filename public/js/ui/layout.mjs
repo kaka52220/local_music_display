@@ -33,7 +33,8 @@ export function createLayout(engine, { toggleLyrics, isLyricsOn }) {
   const barCenterHome = transport.parentElement;
   const barCenterNext = transport.nextElementSibling;
   const slider = document.getElementById('now-slider');
-  const sliderHome = slider.parentElement;
+  const progressWrap = document.getElementById('progress-wrap'); // 进度条 + 高潮提示点，整体搬移
+  const sliderHome = progressWrap.parentElement;
   const dockTransport = document.getElementById('dock-transport');
   const dockSlider = document.getElementById('dock-slider');
   const dockTitle = document.getElementById('dock-title');
@@ -55,10 +56,10 @@ export function createLayout(engine, { toggleLyrics, isLyricsOn }) {
     app.dataset.layout = name;
     if (name === 'split') {
       dockTransport.appendChild(transport);
-      dockSlider.appendChild(slider);
+      dockSlider.appendChild(progressWrap);
     } else {
       barCenterHome.insertBefore(transport, barCenterNext);
-      sliderHome.appendChild(slider);
+      sliderHome.appendChild(progressWrap);
     }
     opts.forEach((o) => o.setAttribute('aria-checked', String(o.dataset.layout === name)));
   }
