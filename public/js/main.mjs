@@ -11,6 +11,8 @@ import { createLayout } from './ui/layout.mjs';
 import { loadSession, saveSession } from './state/persistence.mjs';
 
 const engine = createPlayerEngine();
+// 调试/自动化测试（?audiodebug）：暴露引擎
+if (new URLSearchParams(location.search).has('audiodebug')) window.__engine = engine;
 const nowPlaying = createNowPlaying(engine);
 const sheet = createSheet(engine, {
   onToggleLyrics: nowPlaying.toggleLyrics,
@@ -20,6 +22,9 @@ const layout = createLayout(engine, {
   toggleLyrics: nowPlaying.toggleLyrics,
   isLyricsOn: nowPlaying.isLyricsOn,
 });
+
+// 首次用户手势时解锁 Web Audio（自动播放策略要求 AudioContext 在手势中创建/恢复）；之后每次手势都确保它在运行
+['pointerdown', 'keydown', 'touchend'].forEach((type) => document.addEventListener(type, () => engine.unlock(), { capture: true, passive: true }));
 
 /* ---------------- 播放会话持久化 ---------------- */
 let currentTime = 0;

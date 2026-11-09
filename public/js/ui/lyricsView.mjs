@@ -7,6 +7,10 @@
  *     右侧出现"点击从这里播放 ▶"胶囊；点击胶囊或该行即从此处播放；
  *   3 秒无操作淡出，并平滑回到当前播放行。
  * - 切歌：旧歌词淡出 → "歌词加载中..." → 新歌词淡入。
+ *
+ * 滚动（v6）：不再用原生 scrollTop。歌词容器 overflow:hidden，内层用 translate3d 位移（合成层，GPU 友好）：
+ *  - 换行/拖动进度条定位后，用 ease-out 补间（约 450ms）平滑滚到新行，被打断时从当前位置/速度接着走；
+ *  - 滚轮、触摸、鼠标拖动 1:1 跟手，松手带惯性，停稳后吸附到焦点线。
  */
 import { fetchLyrics } from '../api/client.mjs';
 import { formatTime } from '../util/format.mjs';
@@ -16,6 +20,10 @@ const DEFAULT_FOCUS = 0.4;
 let FOCUS = DEFAULT_FOCUS;
 const IDLE_EXIT_MS = 3000;
 const SETTLE_MS = 160;
+const LINE_SCROLL_MS = 450;   // 自动换行 / 定位后滚到新行
+const SNAP_MS = 280;          // 拖动停稳后吸附
+const FLING_TAU = 325;        // 惯性衰减时间常数（ms）
+const easeOutCubic = (k) => 1 - (1 - k) ** 3;
 
 export function createLyricsView(engine) {
   const wrap = document.getElementById('lyrics-wrap');
@@ -32,11 +40,51 @@ export function createLyricsView(engine) {
   let target = null;       // 定位模式下焦点线上的行
   let idleTimer = 0;
   let settleTimer = 0;
-  let programmatic = false; // 程序触发的滚动（不视为用户操作）
-  let programmaticTimer = 0;
-  let snapping = false;     // 停稳后吸附滚动中（不回到"滚动中"状态）
-  let snapTimer = 0;
   let renderToken = 0;
+
+  /* ---------------- 变换滚动：y = 内容向上偏移量（px） ---------------- */
+  let y = 0;
+  let anim = null;          // { kind:'tween', from, to, t0, dur } | { kind:'fling', v, t }
+  let animRaf = 0;
+  const yLog = [];          // 调试：[t, y]
+  const maxY = () => Math.max(0, inner.offsetHeight - box.clientHeight);
+  const clampY = (v) => Math.min(maxY(), Math.max(0, v));
+  function setY(v) {
+    y = v;
+    inner.style.transform = `translate3d(0, ${(-v).toFixed(2)}px, 0)`;
+    if (scrubbing) placeScrub();
+    if (window.__lyricLog) { yLog.push([Math.round(performance.now()), +v.toFixed(1)]); if (yLog.length > 600) yLog.shift(); }
+  }
+  function stopAnim() { anim = null; cancelAnimationFrame(animRaf); animRaf = 0; }
+  function tweenTo(to, ms, onDone) {
+    to = clampY(to);
+    if (!ms || Math.abs(to - y) < 0.5) { stopAnim(); setY(to); onDone?.(); return; }
+    anim = { kind: 'tween', from: y, to, t0: performance.now(), dur: ms, onDone };
+    if (!animRaf) animRaf = requestAnimationFrame(step);
+  }
+  function fling(v) { // v: px/ms，正值 = 向下滚（内容上移）
+    anim = { kind: 'fling', v, t: performance.now() };
+    if (!animRaf) animRaf = requestAnimationFrame(step);
+  }
+  function step(now) {
+    animRaf = 0;
+    if (!anim) return;
+    if (anim.kind === 'tween') {
+      const k = Math.min(1, (now - anim.t0) / anim.dur);
+      setY(anim.from + (anim.to - anim.from) * easeOutCubic(k));
+      if (k >= 1) { const done = anim.onDone; anim = null; done?.(); return; }
+    } else {
+      const dt = Math.min(50, now - anim.t);
+      anim.t = now;
+      anim.v *= Math.exp(-dt / FLING_TAU);
+      const next = clampY(y + anim.v * dt);
+      const hitEdge = next !== y + anim.v * dt;
+      setY(next);
+      if (Math.abs(anim.v) < 0.02 || hitEdge) { anim = null; scheduleSettle(); return; }
+    }
+    animRaf = requestAnimationFrame(step);
+  }
+  if (new URLSearchParams(location.search).has('lyriclog')) window.__lyricLog = yLog;
 
   /* ---------------- 渲染 ---------------- */
   function readFocus() {
@@ -59,7 +107,7 @@ export function createLyricsView(engine) {
     inner.innerHTML = `<div class="lyric-empty">${text}</div>`;
     inner.style.paddingTop = '0px';
     inner.style.paddingBottom = '0px';
-    box.scrollTop = 0;
+    stopAnim(); setY(0);
   }
 
   async function render(track) {
@@ -111,12 +159,9 @@ export function createLyricsView(engine) {
   }
 
   /* ---------------- 同步与滚动 ---------------- */
+  const lineY = (el) => el.offsetTop + el.offsetHeight / 2 - box.clientHeight * FOCUS;
   function scrollToLine(el, smooth) {
-    const top = el.offsetTop + el.offsetHeight / 2 - box.clientHeight * FOCUS;
-    programmatic = true;
-    clearTimeout(programmaticTimer);
-    programmaticTimer = setTimeout(() => { programmatic = false; }, smooth ? 700 : 60);
-    box.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' });
+    tweenTo(lineY(el), smooth ? LINE_SCROLL_MS : 0);
   }
 
   function sync(currentTime, smooth = true) {
@@ -136,7 +181,7 @@ export function createLyricsView(engine) {
 
   /* ---------------- 定位模式 ---------------- */
   function nearestLine() {
-    const focusY = box.scrollTop + box.clientHeight * FOCUS;
+    const focusY = y + box.clientHeight * FOCUS;
     let best = null; let bestD = Infinity;
     for (const line of lines) {
       if (!line.text) continue;
@@ -161,13 +206,27 @@ export function createLyricsView(engine) {
     scrub.style.top = `${box.offsetTop + box.clientHeight * FOCUS}px`;
   }
 
-  function enterScrub() {
-    if (!synced || !lines.length) return;
-    snapping = false;
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => exitScrub(true), IDLE_EXIT_MS);
+  /** 用户滚动（滚轮/拖动/惯性）停下后：把焦点行吸附到焦点线，引导线过渡为高亮行 */
+  function markMoving() {
     wrap.classList.add('scrub-moving');
     wrap.classList.remove('scrub-settled');
+    clearTimeout(settleTimer);
+  }
+  function scheduleSettle() {
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      if (!scrubbing || !target || drag || anim?.kind === 'fling') return;
+      tweenTo(lineY(target.el), SNAP_MS);
+      wrap.classList.remove('scrub-moving');
+      wrap.classList.add('scrub-settled');
+    }, SETTLE_MS);
+  }
+
+  function enterScrub() {
+    if (!synced || !lines.length) return false;
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => exitScrub(true), IDLE_EXIT_MS);
+    markMoving();
     if (!scrubbing) {
       scrubbing = true;
       placeScrub();
@@ -175,6 +234,7 @@ export function createLyricsView(engine) {
       scrubPlay.tabIndex = 0;
       requestAnimationFrame(() => wrap.classList.add('scrub-on'));
     }
+    return true;
   }
 
   function exitScrub(returnToCurrent) {
@@ -202,54 +262,58 @@ export function createLyricsView(engine) {
     sync(line.time + 0.01, true);
   }
 
-  box.addEventListener('scroll', () => {
-    if (programmatic && !scrubbing) return;
-    if (!scrubbing) return;
-    if (snapping) return;
-    placeScrub();
-    wrap.classList.add('scrub-moving');
-    wrap.classList.remove('scrub-settled');
-    clearTimeout(settleTimer);
-    settleTimer = setTimeout(() => {
-      // 停稳：把焦点行吸附到焦点线，引导线过渡为高亮行
-      if (!scrubbing || !target) return;
-      const top = target.el.offsetTop + target.el.offsetHeight / 2 - box.clientHeight * FOCUS;
-      if (Math.abs(box.scrollTop - top) > 1) {
-        snapping = true;
-        clearTimeout(snapTimer);
-        snapTimer = setTimeout(() => { snapping = false; }, 450);
-        box.scrollTo({ top, behavior: 'smooth' });
-      }
-      wrap.classList.remove('scrub-moving');
-      wrap.classList.add('scrub-settled');
-    }, SETTLE_MS);
-  }, { passive: true });
+  // 滚轮：1:1 位移，停下后吸附
+  box.addEventListener('wheel', (e) => {
+    if (!enterScrub()) return;
+    e.preventDefault();
+    stopAnim();
+    const unit = e.deltaMode === 1 ? 18 : e.deltaMode === 2 ? box.clientHeight : 1;
+    setY(clampY(y + e.deltaY * unit));
+    scheduleSettle();
+  }, { passive: false });
 
-  box.addEventListener('wheel', () => enterScrub(), { passive: true });
-  box.addEventListener('touchmove', () => enterScrub(), { passive: true });
-
-  // 鼠标按住拖动歌词（桌面端），轻点不算拖动
+  // 触摸 / 鼠标拖动：1:1 跟手，松手带惯性；轻点不算拖动
   let drag = null;
+  let suppressClick = false;
   box.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'mouse' || e.button !== 0) return;
-    drag = { y: e.clientY, top: box.scrollTop, moved: false, id: e.pointerId };
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    drag = { y0: e.clientY, top: y, moved: false, id: e.pointerId, samples: [[e.timeStamp, e.clientY]] };
   });
   box.addEventListener('pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id) return;
-    const dy = e.clientY - drag.y;
-    if (!drag.moved && Math.abs(dy) < 4) return;
-    if (!drag.moved) { drag.moved = true; box.setPointerCapture(e.pointerId); box.classList.add('is-grabbing'); }
-    enterScrub();
-    box.scrollTop = drag.top - dy;
+    const dy = e.clientY - drag.y0;
+    if (!drag.moved) {
+      if (Math.abs(dy) < 5) return;
+      if (!enterScrub()) { drag = null; return; }
+      drag.moved = true;
+      drag.y0 = e.clientY; drag.top = y; // 从当前位置（可能在补间中）无缝接管
+      stopAnim();
+      try { box.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      box.classList.add('is-grabbing');
+    }
+    markMoving();
+    let ny = drag.top - (e.clientY - drag.y0);
+    const m = maxY();
+    if (ny < 0) ny *= 0.35; else if (ny > m) ny = m + (ny - m) * 0.35; // 越界阻尼
+    setY(ny);
+    drag.samples.push([e.timeStamp, e.clientY]);
+    while (drag.samples.length > 2 && e.timeStamp - drag.samples[0][0] > 90) drag.samples.shift();
   });
   const endDrag = (e) => {
     if (!drag || e.pointerId !== drag.id) return;
-    const { moved } = drag;
+    const { moved, samples } = drag;
     drag = null;
     box.classList.remove('is-grabbing');
-    if (moved) { e.preventDefault(); suppressClick = true; setTimeout(() => { suppressClick = false; }, 0); }
+    if (!moved) return;
+    suppressClick = true; setTimeout(() => { suppressClick = false; }, 0);
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => exitScrub(true), IDLE_EXIT_MS);
+    const [t0, y0] = samples[0];
+    const [t1, y1] = samples[samples.length - 1];
+    const v = t1 > t0 ? -(y1 - y0) / (t1 - t0) : 0;
+    if (y < 0 || y > maxY()) { tweenTo(clampY(y), SNAP_MS, scheduleSettle); return; }
+    if (Math.abs(v) > 0.15) fling(v); else scheduleSettle();
   };
-  let suppressClick = false;
   box.addEventListener('pointerup', endDrag);
   box.addEventListener('pointercancel', endDrag);
 

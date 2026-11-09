@@ -23,6 +23,12 @@ const OMEGA = 13;           // 弹簧角频率（1/s）：约 380ms 走完 99%
 const ARM_DROP_MS = 560;
 const ARM_LIFT_MS = 420;
 const SWITCH_GRACE_MS = 1500;
+// 旋转（v6）：rAF 推进角度，角速度带缓动——暂停时像真唱机一样减速停下，继续时平滑起转（不再切换 animation-play-state 造成瞬停/瞬起）
+const SPIN_DEG_PER_S = 360 / 24; // 24s 一圈
+const SPIN_UP_MS = 520;
+const SPIN_DOWN_MS = 820;
+const easeInOutSine = (k) => 0.5 - Math.cos(Math.PI * k) / 2;
+const easeOutQuad = (k) => 1 - (1 - k) * (1 - k);
 // 调试：?slowmo=8 让切换动画放慢 8 倍，便于逐帧检查
 const SLOWMO = Math.max(1, Number(new URLSearchParams(location.search).get('slowmo')) || 1);
 
@@ -190,13 +196,44 @@ export function createDiscCarousel(engine) {
     arm.classList.toggle('is-down', down);
     if (down) {
       // 唱针落稳后唱片才开始转（与录屏一致）
-      landTimer = setTimeout(syncSpin, ARM_DROP_MS * 0.8);
+      landTimer = setTimeout(syncSpin, ARM_DROP_MS * 0.55);
     } else syncSpin();
   }
 
+  // 角速度 ω ∈ [0,1]（1 = 正常转速），从当前值缓动到目标值；被打断时从此刻的 ω 接着走，速度曲线连续
+  const angles = new WeakMap(); // .disc 元素 → 当前角度（每张唱片保留自己的角度）
+  let omega = 0; let omegaFrom = 0; let omegaTo = 0; let rampT0 = 0; let rampDur = 0;
+  let spinRaf = 0; let spinLast = 0;
+  const spinLog = []; // 调试：最近的 [t, ω]
+  function setSpin(on) {
+    const to = on ? 1 : 0;
+    if (to === omegaTo) return;
+    omegaFrom = omega; omegaTo = to;
+    rampT0 = performance.now();
+    rampDur = (on ? SPIN_UP_MS : SPIN_DOWN_MS) * Math.abs(to - omegaFrom);
+    stage.classList.toggle('is-spinning', on);
+    if (!spinRaf) { spinLast = rampT0; spinRaf = requestAnimationFrame(spinFrame); }
+  }
+  function spinFrame(now) {
+    const dt = Math.min(0.1, Math.max(0, (now - spinLast) / 1000));
+    spinLast = now;
+    const k = rampDur ? Math.min(1, (now - rampT0) / rampDur) : 1;
+    const ease = omegaTo > omegaFrom ? easeInOutSine : easeOutQuad;
+    omega = omegaFrom + (omegaTo - omegaFrom) * ease(k);
+    const disc = roles.get(0).querySelector('.disc');
+    const a = ((angles.get(disc) || 0) + omega * SPIN_DEG_PER_S * dt) % 360;
+    angles.set(disc, a);
+    disc.style.transform = `rotate(${a.toFixed(3)}deg)`;
+    spinLog.push([Math.round(now), +omega.toFixed(4)]);
+    if (spinLog.length > 400) spinLog.shift();
+    if (k >= 1 && omega === 0) { spinRaf = 0; return; }
+    spinRaf = requestAnimationFrame(spinFrame);
+  }
+  if (new URLSearchParams(location.search).has('spinlog')) window.__spinLog = spinLog;
+
   function syncSpin() {
     const spinning = armDown && engine.isPlaying() && (engine.isAudible() || grace);
-    stage.classList.toggle('is-spinning', spinning);
+    setSpin(spinning);
   }
 
   function syncArm() {

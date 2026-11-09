@@ -158,11 +158,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     radial-gradient(circle, rgba(0,0,0,0) 0 96.2%, rgba(255,255,255,.13) 97.6%, rgba(0,0,0,.6) 99.2%),
     radial-gradient(circle, #050505 0 66%, #101010 70%, #0c0c0c 86%, #151515 94%, #0a0a0a 97%);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .55);
-  animation: spin 24s linear infinite;
-  animation-play-state: paused;
-  will-change: transform;
+  will-change: transform; /* 旋转角由 discCarousel 逐帧写入（带角速度缓动） */
 }
-.disc-stage.is-spinning .disc { animation-play-state: running; }
 /* 细密纹路：极淡的同心圆，随唱片旋转 */
 .disc-grooves {
   position: absolute; inset: 1.5%; border-radius: 50%;
@@ -254,8 +251,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .lyrics-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: clamp(12px, 2.2vh, 28px); }
 .lyrics-box {
   position: relative; flex: 1; min-height: 0;
-  overflow-y: auto; overflow-x: hidden;
-  scrollbar-width: none; overscroll-behavior: contain;
+  overflow: hidden; touch-action: none; /* 滚动由 lyricsView 用 transform 实现 */
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 15%, #000 70%, transparent 100%);
   mask-image: linear-gradient(to bottom, transparent 0, #000 15%, #000 70%, transparent 100%);
   transition: opacity .35s var(--ease);
@@ -263,23 +259,25 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 }
 .lyrics-box.is-grabbing { cursor: grabbing; }
 .lyrics-box::-webkit-scrollbar { display: none; }
-.lyrics-inner { max-width: 620px; transition: opacity .3s var(--ease); }
+.lyrics-inner { max-width: 620px; transition: opacity .3s var(--ease); will-change: transform; backface-visibility: hidden; }
 .lyrics-inner.is-fading { opacity: 0; transition-duration: .16s; }
 .lyric-line {
   position: relative; display: flex; align-items: center;
   padding: clamp(8px, 1.25vh, 13px) 0;
   font-size: clamp(14px, 1.6vh, 18px); line-height: 1.6;
   color: var(--text-3);
-  transition: color .35s var(--ease);
+  transition: color .3s ease, opacity .3s ease;
 }
 .lyric-text {
   flex: 0 1 auto; min-width: 0; display: inline-block;
   transform-origin: 0 50%;
-  transition: transform .4s var(--ease);
+  transition: transform .3s cubic-bezier(.25, .8, .25, 1), text-shadow .3s ease;
 }
 .lyric-line.is-gap { padding: 0; height: clamp(8px, 1.2vh, 14px); }
 .lyric-line.active { color: #fff; }
-.lyric-line.active .lyric-text { transform: scale(1.16); font-weight: 600; text-shadow: 0 0 18px rgba(255, 255, 255, .12); }
+.lyric-line.active .lyric-text { transform: scale(1.16); text-shadow: 0 0 18px rgba(255, 255, 255, .14); }
+/* 字重不可插值：所有行用同一字重，高亮只靠颜色/缩放/光晕过渡，避免换行时字形"跳一下" */
+.lyric-line { font-weight: 500; }
 .lyric-line.is-target { color: rgba(255, 255, 255, .86); }
 .lyrics-wrap.scrub-on .lyric-line { cursor: pointer; }
 .lyric-empty { color: var(--text-3); padding-top: 18vh; font-size: 15px; letter-spacing: .5px; }
@@ -367,6 +365,9 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   background: #fff; opacity: 0; transition: opacity .15s;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, .15), 0 1px 4px rgba(0, 0, 0, .4);
 }
+.progress::-webkit-slider-thumb { transition: transform .16s cubic-bezier(.3, 1.4, .5, 1), opacity .15s; }
+.progress.is-pressing::-webkit-slider-thumb, .progress:active::-webkit-slider-thumb { opacity: 1; transform: scale(1.5); }
+.progress.is-pressing::-moz-range-thumb, .progress:active::-moz-range-thumb { opacity: 1; transform: scale(1.5); }
 .progress::-moz-range-thumb { width: 10px; height: 10px; border: none; border-radius: 50%; background: #fff; opacity: 0; }
 .bar-progress:hover .progress::-webkit-slider-runnable-track {
   height: 4px; --c-played: var(--accent); --c-rest: rgba(255, 255, 255, .12);
@@ -407,6 +408,12 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   width: 50px; height: 50px; padding: 6px;
   color: rgba(255, 255, 255, .95);
 }
+/* 播放/暂停图标交叉变形 */
+.pp { position: relative; display: block; width: 100%; height: 100%; }
+.pp-i { position: absolute; inset: 0; display: block; transition: opacity .2s ease, transform .24s cubic-bezier(.3, 1.35, .5, 1); }
+.pp-pause { opacity: 0; transform: scale(.55) rotate(-90deg); }
+.is-pause .pp-play { opacity: 0; transform: scale(.55) rotate(90deg); }
+.is-pause .pp-pause { opacity: 1; transform: none; }
 #now-prev svg, #now-next svg, .play-btn svg { filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .22)); }
 .play-btn:hover, #now-prev:hover, #now-next:hover { color: #fff; }
 
@@ -633,7 +640,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .app[data-layout="split"] .lyric-text { white-space: normal; overflow-wrap: anywhere; max-width: 94%; }
 .app[data-layout="split"] .lyric-line.is-gap { padding: 0; height: .9em; }
 .app[data-layout="split"] .lyric-line.active { color: #fff; }
-.app[data-layout="split"] .lyric-line.active .lyric-text { transform: scale(1.07); font-weight: 600; }
+.app[data-layout="split"] .lyric-line.active .lyric-text { transform: scale(1.07); }
 .app[data-layout="split"] .lyric-empty { padding-top: 0; position: absolute; top: 50%; transform: translateY(-50%); }
 
 /* ============================================================
