@@ -7,12 +7,17 @@ import { fetchTracks } from './api/client.mjs';
 import { createPlayerEngine } from './player/engine.mjs';
 import { createNowPlaying } from './ui/nowPlaying.mjs';
 import { createSheet } from './ui/sheet.mjs';
+import { createLayout } from './ui/layout.mjs';
 import { loadSession, saveSession } from './state/persistence.mjs';
 
 const engine = createPlayerEngine();
 const nowPlaying = createNowPlaying(engine);
 const sheet = createSheet(engine, {
   onToggleLyrics: nowPlaying.toggleLyrics,
+  isLyricsOn: nowPlaying.isLyricsOn,
+});
+const layout = createLayout(engine, {
+  toggleLyrics: nowPlaying.toggleLyrics,
   isLyricsOn: nowPlaying.isLyricsOn,
 });
 
@@ -42,7 +47,7 @@ engine.on('volumechange', ({ volume, muted }) => {
 
 // 空格键：播放 / 暂停（输入控件、按钮聚焦或歌单打开时除外）
 document.addEventListener('keydown', (event) => {
-  if (event.code !== 'Space' || event.repeat || sheet.isOpen()) return;
+  if (event.code !== 'Space' || event.repeat || sheet.isOpen() || layout.isOpen()) return;
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'TEXTAREA') return;
   event.preventDefault();

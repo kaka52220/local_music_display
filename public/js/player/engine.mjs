@@ -16,6 +16,28 @@ export function createPlayerEngine() {
   let index = -1;
   let mode = PLAY_MODE.SEQUENCE;
   let upcoming = -1; // 随机模式下预先抽好的"下一首"，保证唱片预览与实际切换一致
+  // 播放意图（用户想要播放）与实际出声分开：切歌加载期间意图不变，按钮/唱臂不会闪烁
+  let intent = false;
+  let switching = false; // 正在为自动播放而切换音源，期间忽略浏览器派发的 pause
+  let audible = false;   // 音频真的在走（playing 之后、waiting/pause 之前）
+
+  function setIntent(value) {
+    if (intent === value) return;
+    intent = value;
+    emit('playstate', { playing: value });
+  }
+  function setAudible(value) {
+    if (audible === value) return;
+    audible = value;
+    emit('audible', { audible: value });
+  }
+  function tryPlay() {
+    return audio.play().then(() => { switching = false; }).catch((error) => {
+      if (error && error.name === 'AbortError') return; // 被下一次切歌打断，交给下一次
+      switching = false;
+      setIntent(false);
+    });
+  }
 
   function on(event, handler) {
     if (!listeners.has(event)) listeners.set(event, new Set());
@@ -30,9 +52,11 @@ export function createPlayerEngine() {
     index = nextIndex;
     upcoming = -1;
     const track = queue[index];
+    switching = autoplay;
     audio.src = track.streamUrl;
-    emit('trackchange', { track, index });
-    if (autoplay) audio.play().catch(() => {});
+    emit('trackchange', { track, index }); // 先通知切歌（唱臂据此进入宽限期），再报告"暂未出声"
+    setAudible(false);
+    if (autoplay) { setIntent(true); tryPlay(); } else setIntent(false);
   }
 
   function pickNextIndex() {
@@ -62,7 +86,7 @@ export function createPlayerEngine() {
   audio.addEventListener('ended', () => {
     if (mode === PLAY_MODE.LOOP_ONE) {
       audio.currentTime = 0;
-      audio.play();
+      tryPlay();
     } else if (mode === PLAY_MODE.SEQUENCE && index === queue.length - 1) {
       emit('finished', {}); // 顺序模式到末尾停止
     } else {
@@ -72,8 +96,10 @@ export function createPlayerEngine() {
   audio.addEventListener('timeupdate', () => {
     emit('timeupdate', { currentTime: audio.currentTime, duration: audio.duration });
   });
-  audio.addEventListener('play', () => emit('playstate', { playing: true }));
-  audio.addEventListener('pause', () => emit('playstate', { playing: false }));
+  audio.addEventListener('play', () => setIntent(true));
+  audio.addEventListener('pause', () => { setAudible(false); if (!switching) setIntent(false); });
+  audio.addEventListener('playing', () => { switching = false; setAudible(true); });
+  ['waiting', 'emptied', 'stalled', 'ended'].forEach((type) => audio.addEventListener(type, () => setAudible(false)));
   audio.addEventListener('volumechange', () => emit('volumechange', { volume: audio.volume, muted: audio.muted }));
 
   return {
@@ -86,16 +112,18 @@ export function createPlayerEngine() {
     toggle() {
       if (audio.paused) {
         if (index < 0 && queue.length) loadAt(0);
-        else audio.play().catch(() => {});
+        else { setIntent(true); tryPlay(); }
       } else {
+        switching = false;
         audio.pause();
+        setIntent(false);
       }
     },
     next,
     prev,
     // 仅在已加载曲目时继续播放，供会话恢复使用；自动播放被拦截时静默
     resume() {
-      if (index >= 0) audio.play().catch(() => {});
+      if (index >= 0) tryPlay();
     },
     seek(seconds) {
       audio.currentTime = seconds;
@@ -109,7 +137,9 @@ export function createPlayerEngine() {
       audio.muted = value;
     },
     isMuted: () => audio.muted,
-    isPlaying: () => !audio.paused,
+    /** 播放意图（含切歌加载中）；isAudible 为音频实际在走 */
+    isPlaying: () => intent,
+    isAudible: () => audible,
     cycleMode() {
       const order = [PLAY_MODE.SEQUENCE, PLAY_MODE.LOOP_ONE, PLAY_MODE.SHUFFLE];
       mode = order[(order.indexOf(mode) + 1) % order.length];

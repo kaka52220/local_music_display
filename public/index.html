@@ -21,42 +21,101 @@
       <div class="bg-grain"></div>
     </div>
 
-    <!-- ============ 顶部：左上角歌单入口 ============ -->
+    <!-- ============ 顶部：左上角歌单入口 / 右上角布局样式 ============ -->
     <header class="topbar">
       <button class="ghost-btn" id="btn-sheet" aria-label="打开歌单" aria-haspopup="dialog" aria-expanded="false" title="歌单"></button>
+      <button class="ghost-btn" id="btn-layout" aria-label="布局样式" aria-haspopup="dialog" aria-expanded="false" title="布局样式"></button>
     </header>
 
-    <!-- ============ 舞台：左黑胶轮播 / 右信息+歌词 ============ -->
+    <!-- ============ 舞台：唱片（固定底座 + 滑动黑胶 + 唱臂）/ 信息 + 歌词 ============ -->
     <main class="stage">
       <section class="disc-col" id="disc-col">
+        <div class="disc-area">
         <div class="disc-stage" id="disc-stage" aria-label="左右拖动唱片切换歌曲" title="左右拖动唱片切换歌曲">
-          <div class="disc-track" id="disc-track">
-            <div class="disc-slot" data-slot="-1"></div>
-            <div class="disc-slot" data-slot="0"></div>
-            <div class="disc-slot" data-slot="1"></div>
-          </div>
-          <div class="tonearm" id="tonearm">
-            <svg viewBox="0 -30 100 130" aria-hidden="true">
+          <!-- 浅色半透明底座：固定不动，切歌时只有黑胶在滑 -->
+          <div class="disc-base" aria-hidden="true"></div>
+          <div class="disc-slot"></div>
+          <div class="disc-slot"></div>
+          <div class="disc-slot"></div>
+          <!-- 唱臂：viewBox 0 -34 100 134（底座直径 = 100），转轴 (50,-20) -->
+          <div class="tonearm" id="tonearm" aria-hidden="true">
+            <svg viewBox="0 -34 100 134">
               <defs>
-                <linearGradient id="arm-g" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0" stop-color="#d9d9d9"/><stop offset=".5" stop-color="#ffffff"/><stop offset="1" stop-color="#cfcfcf"/>
-                </linearGradient>
-                <radialGradient id="pivot-g" cx=".38" cy=".35" r=".7">
-                  <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d0d0d0"/>
+                <radialGradient id="ta-knob" cx=".36" cy=".32" r=".75">
+                  <stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#e4e6e9"/><stop offset="1" stop-color="#a3a9b0"/>
                 </radialGradient>
+                <radialGradient id="ta-cap" cx=".4" cy=".35" r=".7">
+                  <stop offset="0" stop-color="#f7f8f9"/><stop offset="1" stop-color="#bfc4ca"/>
+                </radialGradient>
+                <linearGradient id="ta-weight" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#7d838a"/><stop offset=".32" stop-color="#eef0f2"/><stop offset=".5" stop-color="#ffffff"/><stop offset=".78" stop-color="#b9bec4"/><stop offset="1" stop-color="#6f757c"/>
+                </linearGradient>
+                <linearGradient id="ta-collar" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#8e949b"/><stop offset=".45" stop-color="#f2f3f5"/><stop offset="1" stop-color="#868c93"/>
+                </linearGradient>
+                <linearGradient id="ta-shell" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#eceef1"/><stop offset="1" stop-color="#b4b9c0"/>
+                </linearGradient>
+                <path id="ta-tube-path" d="M50 -20 C 50.4 -9, 51.6 -1.5, 54.8 5.2 C 57.6 11, 61.2 14.6, 65.4 17.2"/>
               </defs>
-              <circle cx="49.6" cy="-21.8" r="4.6" fill="rgba(0,0,0,.22)"/>
-              <path d="M49.6 -21.8 C 50.3 -12, 51.4 -4, 54.6 3.2 C 57.4 9.2, 61.6 12.4, 66.2 14.6"
-                    fill="none" stroke="url(#arm-g)" stroke-width="1.4" stroke-linecap="round"/>
-              <g transform="translate(70.6 17.3) rotate(38)">
-                <rect x="-3.6" y="-1.05" width="3" height="2.1" rx=".4" fill="#a9a9a9"/>
-                <rect x="-.9" y="-1.75" width="5.6" height="3.5" rx=".8" fill="#f2f2f2"/>
-                <rect x="-.9" y=".9" width="5.6" height=".85" rx=".4" fill="#c8c8c8"/>
+              <!-- 底座：深色圆盘 + 细高光边 -->
+              <circle cx="50" cy="-20" r="6.6" fill="rgba(0,0,0,.2)"/>
+              <circle cx="50" cy="-20" r="6.6" fill="none" stroke="rgba(255,255,255,.1)" stroke-width=".3"/>
+              <!-- 配重：转轴后方伸出的圆柱 -->
+              <path d="M50 -20 V -27.6" stroke="#aeb3b9" stroke-width="2" stroke-linecap="round"/>
+              <rect x="46.4" y="-32.2" width="7.2" height="5" rx="1.3" fill="url(#ta-weight)"/>
+              <path d="M46.6 -30.6 H53.4 M46.6 -29.2 H53.4 M46.6 -27.8 H53.4" stroke="rgba(0,0,0,.16)" stroke-width=".28"/>
+              <rect x="46.4" y="-32.2" width="7.2" height="5" rx="1.3" fill="none" stroke="rgba(0,0,0,.18)" stroke-width=".25"/>
+              <!-- 唱臂管：分层描边做出圆柱高光 -->
+              <use href="#ta-tube-path" fill="none" stroke="#9fa5ac" stroke-width="2.3" stroke-linecap="round"/>
+              <use href="#ta-tube-path" fill="none" stroke="#e9ebee" stroke-width="1.55" stroke-linecap="round" transform="translate(-.18 -.08)"/>
+              <use href="#ta-tube-path" fill="none" stroke="#ffffff" stroke-width=".5" stroke-linecap="round" transform="translate(-.5 -.22)" opacity=".95"/>
+              <!-- 关节套环 -->
+              <g transform="translate(50.38 -10.6) rotate(3)">
+                <rect x="-1.75" y="-.95" width="3.5" height="1.9" rx=".45" fill="url(#ta-collar)"/>
+                <path d="M-1.75 0 H1.75" stroke="rgba(0,0,0,.18)" stroke-width=".22"/>
               </g>
-              <circle cx="49.6" cy="-21.8" r="2.45" fill="url(#pivot-g)"/>
-              <circle cx="49.6" cy="-21.8" r=".95" fill="#b9b9b9"/>
+              <!-- 唱头：连接颈 + 带散热纹的唱头壳 + 指拨 + 黑色唱头 -->
+              <g transform="translate(65.4 17.2) rotate(32)">
+                <rect x="-.9" y="-1.25" width="2.4" height="2.5" rx=".5" fill="url(#ta-collar)"/>
+                <rect x="1.2" y="-.7" width="1.4" height="1.4" fill="#8f959c"/>
+                <rect x="4.1" y="2" width="5.2" height="1.7" rx=".45" fill="#26282c"/>
+                <rect x="8.2" y="3.5" width=".8" height=".7" rx=".2" fill="#c9a24a"/>
+                <path d="M10.6 -2 Q 12.2 -2.6 13.1 -3.9" fill="none" stroke="#dfe2e6" stroke-width=".85" stroke-linecap="round"/>
+                <rect x="2.4" y="-2.55" width="8.8" height="5.1" rx="1.15" fill="url(#ta-shell)"/>
+                <rect x="2.4" y="-2.55" width="8.8" height="5.1" rx="1.15" fill="none" stroke="rgba(0,0,0,.16)" stroke-width=".25"/>
+                <path d="M5.3 -1.7 V1.7 M6.5 -1.7 V1.7 M7.7 -1.7 V1.7" stroke="rgba(0,0,0,.2)" stroke-width=".32" stroke-linecap="round"/>
+                <path d="M2.9 -2.05 H10.6" stroke="#fff" stroke-width=".35" stroke-linecap="round" opacity=".9"/>
+              </g>
+              <!-- 转轴旋钮：同心圆 + 高光 -->
+              <circle cx="50" cy="-20" r="3.7" fill="url(#ta-knob)"/>
+              <circle cx="50" cy="-20" r="3.7" fill="none" stroke="rgba(0,0,0,.2)" stroke-width=".25"/>
+              <circle cx="50" cy="-20" r="2.45" fill="none" stroke="rgba(0,0,0,.14)" stroke-width=".28"/>
+              <circle cx="50" cy="-20" r="1.55" fill="url(#ta-cap)"/>
+              <circle cx="50" cy="-20" r=".6" fill="#8c9299"/>
+              <circle cx="49.1" cy="-21" r=".7" fill="#fff" opacity=".8"/>
             </svg>
           </div>
+        </div>
+        </div>
+
+        <!-- 分栏布局：唱片下方的歌曲信息 / 进度 / 控制（经典布局下隐藏） -->
+        <div class="dock" id="dock">
+          <div class="dock-meta">
+            <div class="dock-text">
+              <h2 class="dock-title" id="dock-title">未在播放</h2>
+              <p class="dock-artist" id="dock-artist">&nbsp;</p>
+            </div>
+            <div class="dock-actions">
+              <button class="icon-btn like-btn" id="btn-like" aria-label="喜欢" aria-pressed="false" title="喜欢"></button>
+              <button class="icon-btn" id="btn-dock-lyric" aria-label="显示/隐藏歌词" title="歌词"></button>
+            </div>
+          </div>
+          <div class="dock-progress" id="dock-progress">
+            <div class="dock-slider" id="dock-slider"></div>
+            <div class="dock-times"><span id="dock-cur">00:00</span><span id="dock-total">00:00</span></div>
+          </div>
+          <div class="dock-transport" id="dock-transport"></div>
         </div>
       </section>
 
@@ -70,6 +129,8 @@
             <button class="tab" role="tab" aria-selected="false" disabled title="即将支持">相似推荐</button>
           </div>
         </div>
+        <!-- 分栏布局：歌词上方的署名信息 -->
+        <div class="credits" id="credits"></div>
         <div class="lyrics-wrap" id="lyrics-wrap">
           <div class="lyrics-box" id="lyrics-box">
             <div class="lyrics-inner" id="lyrics-inner"></div>
@@ -96,7 +157,7 @@
         </div>
         <span class="bar-time"><span id="now-cur">00:00</span><i>/</i><span id="now-total">00:00</span></span>
       </div>
-      <div class="bar-center">
+      <div class="bar-center" id="transport">
         <button class="icon-btn" id="now-mode" aria-label="播放模式"></button>
         <button class="icon-btn" id="now-prev" aria-label="上一首" title="上一首"></button>
         <button class="icon-btn play-btn" id="now-play" aria-label="播放或暂停"></button>
@@ -114,6 +175,37 @@
         </div>
       </div>
     </footer>
+
+    <!-- ============ 布局样式选择弹窗（右上角） ============ -->
+    <div class="lp-scrim" id="lp-scrim"></div>
+    <section class="layout-pop" id="layout-pop" role="dialog" aria-modal="false" aria-labelledby="lp-title" aria-hidden="true" inert>
+      <header class="lp-head">
+        <h2 class="lp-title" id="lp-title">播放页布局</h2>
+        <p class="lp-sub">选择你喜欢的界面排布，随时可切换</p>
+      </header>
+      <div class="lp-options" role="radiogroup" aria-labelledby="lp-title">
+        <button class="lp-opt" role="radio" data-layout="classic" aria-checked="false">
+          <span class="lp-thumb lp-thumb-classic" aria-hidden="true">
+            <i class="t-disc"></i><i class="t-arm"></i>
+            <i class="t-lines"><b></b><b></b><b class="on"></b><b></b><b></b></i>
+            <i class="t-bar"><b></b><b class="play"></b><b></b></i>
+          </span>
+          <span class="lp-name">经典布局<em class="lp-check" aria-hidden="true"></em></span>
+          <span class="lp-desc">唱片在左 · 歌词在右 · 底部控制栏</span>
+        </button>
+        <button class="lp-opt" role="radio" data-layout="split" aria-checked="false">
+          <span class="lp-thumb lp-thumb-split" aria-hidden="true">
+            <i class="t-disc"></i><i class="t-arm"></i>
+            <i class="t-meta"><b></b><b></b></i>
+            <i class="t-prog"></i>
+            <i class="t-ctrl"><b></b><b class="play"></b><b></b></i>
+            <i class="t-lines"><b></b><b></b><b class="on"></b><b></b><b></b><b></b></i>
+          </span>
+          <span class="lp-name">分栏布局<em class="lp-check" aria-hidden="true"></em></span>
+          <span class="lp-desc">播放器与控制在左 · 歌词在右</span>
+        </button>
+      </div>
+    </section>
 
     <!-- ============ 歌单底部弹窗 ============ -->
     <div class="sheet-scrim" id="sheet-scrim"></div>
