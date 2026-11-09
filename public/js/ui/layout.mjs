@@ -9,6 +9,7 @@
  */
 import { ICONS } from './icons.mjs';
 import { formatTime } from '../util/format.mjs';
+import { swapIn } from './nowPlaying.mjs';
 
 const LAYOUT_KEY = 'local-player/layout/v1';
 const LIKES_KEY = 'local-player/likes/v1';
@@ -141,39 +142,34 @@ export function createLayout(engine, { toggleLyrics, isLyricsOn }) {
     });
   }
 
-  let metaTimer = 0;
-  let firstTrack = true;
   engine.on('trackchange', ({ track }) => {
     current = track;
-    const apply = () => {
-      dockTitle.textContent = track.title;
-      dockTitle.title = track.title;
-      dockArtist.textContent = track.artist || '未知歌手';
-      renderCredits(track);
-      renderLike();
-      dockMeta.classList.remove('is-swapping');
-      credits.classList.remove('is-swapping');
-    };
-    clearTimeout(metaTimer);
+    // 当帧更新文字 + 短淡入，不延迟
+    dockTitle.textContent = track.title;
+    dockTitle.title = track.title;
+    dockArtist.textContent = track.artist || '未知歌手';
+    renderCredits(track);
+    renderLike();
     dockTotal.textContent = formatTime(track.duration);
     dockCur.textContent = '00:00';
-    if (firstTrack) { firstTrack = false; apply(); return; }
-    dockMeta.classList.add('is-swapping');
-    credits.classList.add('is-swapping');
-    metaTimer = setTimeout(apply, 180);
+    swapIn(dockMeta);
+    swapIn(credits);
   });
 
   let scrubbing = false;
   slider.addEventListener('input', () => {
     scrubbing = true;
-    const d = engine.getQueue()[engine.getIndex()]?.duration || 0;
-    if (d) dockCur.textContent = formatTime((Number(slider.value) / 1000) * d);
+    const d = engine.getDuration() || 0;
+    if (d) { lastCur = ''; dockCur.textContent = formatTime((Number(slider.value) / Number(slider.max)) * d); }
   });
   slider.addEventListener('change', () => { scrubbing = false; });
+  let lastCur = '';
+  let lastTotal = '';
   engine.on('timeupdate', ({ currentTime, duration }) => {
     if (scrubbing) return;
-    dockCur.textContent = formatTime(currentTime);
-    if (duration) dockTotal.textContent = formatTime(duration);
+    const c = formatTime(currentTime);
+    if (c !== lastCur) { dockCur.textContent = c; lastCur = c; }
+    if (duration) { const t = formatTime(duration); if (t !== lastTotal) { dockTotal.textContent = t; lastTotal = t; } }
   });
 
   renderLyricBtn();

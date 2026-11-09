@@ -96,16 +96,16 @@ export function createSheet(engine, { onToggleLyrics, isLyricsOn }) {
     if (!row) return;
     const index = Number(row.dataset.index);
     close();
-    // 等弹窗收起后再切歌，让唱片滑动动画完整可见
+    // 立即切歌（声音不等弹窗收起）；弹窗收起与唱片滑动同时进行
     if (index === engine.getIndex()) { if (!engine.isPlaying()) engine.toggle(); return; }
-    setTimeout(() => engine.playAt(index), CLOSE_MS - 60);
+    engine.playAt(index);
   });
   list.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.classList.contains('song')) e.target.click();
   });
   search.addEventListener('input', renderList);
 
-  document.getElementById('sa-playall').addEventListener('click', () => { close(); setTimeout(() => engine.playAt(0), CLOSE_MS - 60); });
+  document.getElementById('sa-playall').addEventListener('click', () => { close(); engine.playAt(0); });
   document.getElementById('sa-mode').addEventListener('click', () => engine.cycleMode());
   document.getElementById('sa-locate').addEventListener('click', () => { search.value = ''; renderList(); locateCurrent(); });
   document.getElementById('sa-lyric').addEventListener('click', () => { onToggleLyrics(); renderLyricLabel(); });

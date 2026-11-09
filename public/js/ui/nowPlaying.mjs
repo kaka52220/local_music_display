@@ -11,6 +11,13 @@ import { createLyricsView } from './lyricsView.mjs';
 
 const DEFAULT_TINT = { h: 330, s: 7, l: 24 };
 
+/** 重新触发一次淡入动画 */
+export function swapIn(el) {
+  el.classList.remove('swap-in');
+  void el.offsetWidth;
+  el.classList.add('swap-in');
+}
+
 /** 从封面图提取一个"氛围色"：按饱和度加权平均，避免被大片黑白主导。 */
 function extractTint(img) {
   try {
@@ -108,7 +115,6 @@ export function createNowPlaying(engine) {
   }
 
   /* ---------------- 标题信息交叉淡入 ---------------- */
-  let metaTimer = 0;
   function setMeta(track, animate) {
     const apply = () => {
       bigTitle.textContent = track.title;
@@ -124,14 +130,10 @@ export function createNowPlaying(engine) {
       qualityTag.hidden = false;
       qualityTag.textContent = track.format.toUpperCase() === 'FLAC' ? '无损 FLAC' : `标准 ${track.format.toUpperCase()}`;
       document.title = `${track.title} - ${track.artist}`;
-      meta.classList.remove('is-swapping');
-      barTrack.classList.remove('is-swapping');
     };
-    clearTimeout(metaTimer);
-    if (!animate) { apply(); return; }
-    meta.classList.add('is-swapping');
-    barTrack.classList.add('is-swapping');
-    metaTimer = setTimeout(apply, 200);
+    // 切歌当帧立刻换文字，再用一个很短的淡入动画过渡（不再先淡出 200ms 再换）
+    apply();
+    if (animate) [meta, barTrack].forEach(swapIn);
   }
 
   /* ---------------- 歌词显隐（底栏"词"/歌单快捷操作） ---------------- */

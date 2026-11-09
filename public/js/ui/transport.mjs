@@ -9,6 +9,7 @@ import { formatTime } from '../util/format.mjs';
 
 export function bindTransport(engine, refs) {
   let duration = 0;
+  const SCALE = Number(refs.slider?.max) || 1000; // 进度条精度（10000 → 拖动/逐帧移动足够细腻）
   let seeking = false;
 
   refs.play.innerHTML = ICONS.play;
@@ -21,21 +22,36 @@ export function bindTransport(engine, refs) {
   refs.next?.addEventListener('click', () => engine.next());
   refs.mode?.addEventListener('click', () => engine.cycleMode());
 
-  // 进度条已播放部分用 CSS 变量 --p 绘制（0–100%）
+  // 进度条：已播放 --p、已缓冲到 --b（0–100%），由 CSS 渐变绘制三段（已播放 / 已缓存 / 未加载）
+  let buffered = [];
+  let lastP = '';
+  let lastB = '';
   function paintSlider() {
     if (!refs.slider) return;
-    refs.slider.style.setProperty('--p', `${Number(refs.slider.value) / 10}%`);
+    const p = `${(Number(refs.slider.value) / SCALE) * 100}%`;
+    if (p !== lastP) { refs.slider.style.setProperty('--p', p); lastP = p; }
+    paintBuffered();
+  }
+  function paintBuffered() {
+    if (!refs.slider || !duration) return;
+    const t = (Number(refs.slider.value) / SCALE) * duration;
+    // 取包含当前播放位置的缓冲区间；没有则取起点之后最近的一段
+    let end = 0;
+    for (const [a, b] of buffered) { if (a <= t + 0.5 && b >= t) { end = b; break; } }
+    const v = `${Math.min(100, (end / duration) * 100).toFixed(2)}%`;
+    if (v !== lastB) { refs.slider.style.setProperty('--b', v); lastB = v; }
   }
 
   if (refs.slider) {
     refs.slider.addEventListener('input', () => {
       seeking = true;
       paintSlider();
-      if (refs.cur && duration) refs.cur.textContent = formatTime((Number(refs.slider.value) / 1000) * duration);
+      if (refs.cur && duration) refs.cur.textContent = formatTime((Number(refs.slider.value) / SCALE) * duration);
     });
+    // 松手才真正定位（拖动中拇指已同步跟手）；引擎会立即按目标时间回报，拇指不会回跳
     refs.slider.addEventListener('change', () => {
-      if (duration) engine.seek((Number(refs.slider.value) / 1000) * duration);
       seeking = false;
+      if (duration) engine.seek((Number(refs.slider.value) / SCALE) * duration, { fast: true });
     });
     paintSlider();
   }
@@ -52,21 +68,33 @@ export function bindTransport(engine, refs) {
     refs.play.innerHTML = playing ? ICONS.pause : ICONS.play;
     refs.play.title = playing ? '暂停' : '播放';
   });
+  // 播放中每帧都会到这里（引擎用 rAF 驱动），只在文字变化时写 DOM
+  let lastCur = '';
+  let lastTotal = '';
   engine.on('timeupdate', (payload) => {
     duration = payload.duration || duration;
     if (seeking) return;
-    if (refs.cur) refs.cur.textContent = formatTime(payload.currentTime);
-    if (refs.total) refs.total.textContent = formatTime(payload.duration);
+    const cur = formatTime(payload.currentTime);
+    if (refs.cur && cur !== lastCur) { refs.cur.textContent = cur; lastCur = cur; }
+    const total = formatTime(payload.duration);
+    if (refs.total && total !== lastTotal) { refs.total.textContent = total; lastTotal = total; }
     if (refs.slider && payload.duration) {
-      refs.slider.value = Math.round((payload.currentTime / payload.duration) * 1000);
+      const v = Math.round((payload.currentTime / payload.duration) * SCALE);
+      if (String(v) !== refs.slider.value) refs.slider.value = v;
       paintSlider();
     }
   });
+  engine.on('buffered', ({ ranges, duration: d }) => {
+    buffered = ranges;
+    if (d) duration = d;
+    paintBuffered();
+  });
   engine.on('trackchange', ({ track }) => {
     duration = track.duration || 0;
+    buffered = [];
     if (refs.slider) { refs.slider.value = 0; paintSlider(); }
-    if (refs.cur) refs.cur.textContent = '00:00';
-    if (refs.total) refs.total.textContent = formatTime(track.duration);
+    if (refs.cur) { refs.cur.textContent = '00:00'; lastCur = '00:00'; }
+    if (refs.total) { refs.total.textContent = formatTime(track.duration); lastTotal = refs.total.textContent; }
   });
   engine.on('modechange', ({ mode }) => renderMode(mode));
   renderMode(engine.getMode());

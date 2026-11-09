@@ -21,6 +21,7 @@ const staticHandler = serveStatic(publicDir);
 const apiRouter = createRouter([
   { method: 'GET', pattern: '/api/tracks', handler: listTracks },
   { method: 'GET', pattern: '/api/stream/:id', handler: streamTrack },
+  { method: 'HEAD', pattern: '/api/stream/:id', handler: streamTrack },
   { method: 'GET', pattern: '/api/cover/:id', handler: coverTrack },
   { method: 'GET', pattern: '/api/lyrics/:id', handler: getLyrics },
 ]);

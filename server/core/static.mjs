@@ -20,7 +20,15 @@ export function serveStatic(rootDir) {
         res.writeHead(404);
         return res.end('not found');
       }
+      // 页面资源：每次用 ETag 协商（改了代码立即生效，没改则 304，省流量）
+      const etag = `"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}"`;
+      const headers = { 'Cache-Control': 'no-cache', ETag: etag, 'Last-Modified': info.mtime.toUTCString() };
+      if (req.headers['if-none-match'] === etag) {
+        res.writeHead(304, headers);
+        return res.end();
+      }
       res.writeHead(200, {
+        ...headers,
         'Content-Type': mimeFor(extname(target)),
         'Content-Length': info.size,
       });

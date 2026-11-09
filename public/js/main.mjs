@@ -65,9 +65,13 @@ try {
   sheet.setTracks(tracks);
 
   const saved = loadSession();
+  // 用户在曲目列表返回前就点了播放：尊重用户操作，不再用会话恢复覆盖
+  const userActed = engine.getIndex() >= 0;
   if (saved && typeof saved.volume === 'number') engine.setVolume(saved.volume);
   const foundIndex = saved?.trackId ? tracks.findIndex((track) => track.id === saved.trackId) : -1;
-  if (foundIndex >= 0) {
+  if (userActed) {
+    /* 保持用户已开始的播放 */
+  } else if (foundIndex >= 0) {
     // 先加载不自动播放，再恢复位置，最后尝试继续播放（被浏览器拦截时保持暂停）
     engine.playAt(foundIndex, false);
     if (saved.position > 0) engine.seek(saved.position);
