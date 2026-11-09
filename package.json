@@ -1,0 +1,16 @@
+{
+  "name": "local-player",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "本地音乐播放器（纯本地，无账号/网络/评论功能）",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server/index.mjs"
+  },
+  "dependencies": {
+    "music-metadata": "^11.0.0"
+  }
+}
