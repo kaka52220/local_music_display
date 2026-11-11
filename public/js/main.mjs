@@ -16,6 +16,7 @@ import { createLyricClock } from './player/lyricClock.mjs';
 import { createLyricOffsetControls } from './ui/lyricOffset.mjs';
 import { createBackgroundStyle } from './ui/fluidBackground.mjs';
 import { createMiniLyrics } from './ui/miniLyrics.mjs';
+import { createPhone } from './ui/phone.mjs';
 
 const engine = createPlayerEngine();
 initPressFeedback();
@@ -25,21 +26,23 @@ if (new URLSearchParams(location.search).has('audiodebug')) window.__engine = en
 const clock = createLyricClock(engine);
 const background = createBackgroundStyle();
 let mini = null;
+let phone = null;
 const nowPlaying = createNowPlaying(engine, {
   clock,
   onLyrics: (track, data) => mini?.setLyrics(track, data),
   onCover: (track, img) => background.setCover(img),
 });
 const sheet = createSheet(engine, {
-  onToggleLyrics: nowPlaying.toggleLyrics,
-  isLyricsOn: nowPlaying.isLyricsOn,
+  onToggleLyrics: () => phone?.isActive() ? phone.toggleLyrics() : nowPlaying.toggleLyrics(),
+  isLyricsOn: () => phone?.isActive() ? phone.isLyricsOn() : nowPlaying.isLyricsOn(),
 });
 const layout = createLayout(engine, {
   toggleLyrics: nowPlaying.toggleLyrics,
   isLyricsOn: nowPlaying.isLyricsOn,
 });
-const sleep = createSleepTimer(engine);
 mini = createMiniLyrics(engine, clock);
+phone = createPhone(engine, { sheet, mini });
+const sleep = createSleepTimer(engine);
 createLyricOffsetControls(clock);
 createFullscreenToggle();
 if (new URLSearchParams(location.search).has('audiodebug')) Object.assign(window, { __sleep: sleep, __clock: clock, __mini: mini });
@@ -91,6 +94,7 @@ try {
   libraryVersion = version;
   engine.setQueue(tracks);
   sheet.setTracks(tracks);
+  phone.setTracks(tracks);
 
   const saved = loadSession();
   // 用户在曲目列表返回前就点了播放：尊重用户操作，不再用会话恢复覆盖
@@ -112,6 +116,7 @@ try {
   }
 } catch (error) {
   document.getElementById('big-title').textContent = error.message || '加载曲目失败';
+  phone.setError(error.message);
 }
 
 /* ---------------- 音乐库自动更新（SSE） ---------------- */
